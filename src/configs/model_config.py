@@ -3,25 +3,32 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
-    d_model: int
-    n_heads: int
-    n_layers: int
-    d_ff: int
+    d_model: int    # Embedding dimension
+    n_heads: int    # Number of attention heads
+    n_layers: int   # Number of transformer blocks
+    d_ff: int       # Feed-forward dimension
 
     n_kv_heads: int
+    sliding_window: int
+    attention_bias: bool
+    rms_norm_eps: float
+    rms_norm: bool
+
     max_seq_len: int
+    num_documents: int
+    max_tokens: int
 
     batch_size: int
     max_steps: int
-    grad_accumulation_steps: int
-
+    gradient_accumulation_steps: int
     muon_lr: float
-    weight_decay: float
-    dropout: float
-    grad_clip: float
 
     eval_every: int
     eval_steps: int
+
+    weight_decay: float
+    dropout: float
+    grad_clip: float
 
     use_amp: bool
     device: str
@@ -35,8 +42,8 @@ class ModelConfig:
             raise ValueError("n_heads must be divisible by n_kv_heads")
 
     @property
-    def head_dim(self) -> int:
-        return self.d_model // self.n_heads
+    def d_k(self) -> int:
+        return self.d_model // self.n_heads # head_dim
 
     @property
     def n_kv_groups(self) -> int:
