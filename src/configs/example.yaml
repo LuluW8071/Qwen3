@@ -1,0 +1,38 @@
+## Model Architecture
+# Layers Parameters
+d_model: 8
+n_heads: 4
+n_layers: 2
+d_ff: 64
+
+# Attention Parameters
+n_kv_heads: 2
+sliding_window: 4096
+attention_bias: false
+rms_norm_eps: 0.000001
+rms_norm: false
+
+# Data Parameters
+max_seq_len: 1024
+num_documents: 500
+max_tokens: 500000
+
+# Train Parameters
+batch_size: 8
+max_steps: 100000
+gradient_accumulation_steps: 1
+muon_lr: 0.01
+
+# Eval Parameters
+eval_every: 1000
+eval_steps: 250
+
+# Regularization
+weight_decay: 0.1
+dropout: 0.1
+grad_clip: 1.0
+
+# Technical
+use_amp: true
+device: cuda
+vocab_size: null
