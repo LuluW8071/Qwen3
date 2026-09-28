@@ -43,9 +43,11 @@ def main() -> None:
     model = Qwen3LLM(config)
     lightning_module = QwenTrainer(model, config)
 
-    if config.device == "cuda" and not torch.cuda.is_available():
+    requested_device = str(config.device).lower()
+    use_cuda = requested_device.startswith("cuda") or requested_device == "gpu"
+    if use_cuda and not torch.cuda.is_available():
         raise RuntimeError("Config requests CUDA, but no CUDA device is available")
-    use_cuda = config.device == "cuda"
+    config.device = "cuda" if use_cuda else "cpu"
     plugins = []
     if use_cuda:
         plugins.append(
