@@ -35,6 +35,8 @@ class ModelConfig:
     vocab_size: int | None
 
     def __post_init__(self):
+        self.rms_norm_eps = float(self.rms_norm_eps)
+
         if self.d_model % self.n_heads != 0:
             raise ValueError("d_model must be divisible by n_heads")
 

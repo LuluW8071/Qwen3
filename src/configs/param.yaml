@@ -10,6 +10,7 @@ n_kv_heads: 4
 sliding_window: 4096
 attention_bias: False
 rms_norm_eps: 1e-6
+rms_norm: false
 
 # Data Parameters
 max_seq_len: 1024

@@ -47,6 +47,13 @@ def test_text_token_dataset_shifts_targets_by_one():
     assert targets.tolist() == [3, 4, 5]
 
 
+def test_model_config_coerces_rms_norm_eps_string():
+    config = make_config(rms_norm_eps="1e-6")
+
+    assert config.rms_norm_eps == 1e-6
+    assert isinstance(config.rms_norm_eps, float)
+
+
 def test_data_module_splits_cached_tokens_deterministically(monkeypatch):
     config = make_config(max_seq_len=4)
     monkeypatch.setattr(
@@ -74,4 +81,9 @@ def test_trainer_builds_muon_and_8bit_optimizers():
 
     assert len(optimizers) == 2
     assert optimizers[0].__class__.__name__ == "Muon"
-    assert optimizers[1].__class__.__name__ == "Adam8bit"
+    expected_optimizer = (
+        "Adam8bit"
+        if config.device == "cuda" and torch.cuda.is_available()
+        else "AdamW"
+    )
+    assert optimizers[1].__class__.__name__ == expected_optimizer

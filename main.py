@@ -43,6 +43,15 @@ def main() -> None:
     if config.device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("Config requests CUDA, but no CUDA device is available")
     use_cuda = config.device == "cuda"
+    plugins = []
+    if use_cuda:
+        plugins.append(
+            BitsandbytesPrecision(
+                mode="int8-training",
+                dtype=torch.float16,
+                ignore_modules={"lm_head"},
+            )
+        )
     trainer = pl.Trainer(
         accelerator="gpu" if use_cuda else "cpu",
         devices=1,
@@ -51,11 +60,7 @@ def main() -> None:
         limit_val_batches=config.eval_steps,
         check_val_every_n_epoch=None,
         val_check_interval=config.eval_every,
-        plugins=BitsandbytesPrecision(
-            mode="int8-training",
-            dtype=torch.float16,
-            ignore_modules={"lm_head"},
-        ),
+        plugins=plugins,
         logger=False,
         enable_checkpointing=False,
     )

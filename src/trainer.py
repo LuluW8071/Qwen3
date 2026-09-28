@@ -52,18 +52,24 @@ class QwenTrainer(pl.LightningModule):
             lr=config.muon_lr,
             momentum=0.95
         )
-        try:
-            import bitsandbytes as bnb
-        except ImportError as exc:
-            raise ImportError(
-                "8-bit optimizer requires `bitsandbytes`."
-            ) from exc
-
-        adamW_optimizer = bnb.optim.Adam8bit(
-            adamW_params,
-            lr=config.muon_lr*0.1,
-            weight_decay=config.weight_decay
-        )
+        if config.device == "cuda" and torch.cuda.is_available():
+            try:
+                import bitsandbytes as bnb
+            except ImportError as exc:
+                raise ImportError(
+                    "8-bit optimizer requires `bitsandbytes`."
+                ) from exc
+            adamW_optimizer = bnb.optim.Adam8bit(
+                adamW_params,
+                lr=config.muon_lr * 0.1,
+                weight_decay=config.weight_decay,
+            )
+        else:
+            adamW_optimizer = optim.AdamW(
+                adamW_params,
+                lr=config.muon_lr * 0.1,
+                weight_decay=config.weight_decay,
+            )
 
         return [muon_optimizer, adamW_optimizer]
 

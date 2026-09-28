@@ -9,7 +9,7 @@ def setup_logging():
 
     loguru_logger.add(
         sys.stdout,
-        level="DEBUG",
+        level="INFO",
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
