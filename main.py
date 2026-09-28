@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--max-seq-len", type=int, default=None)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default=None)
     args = parser.parse_args()
 
     with args.config.open() as file:
@@ -34,6 +35,8 @@ def main() -> None:
         config.batch_size = args.batch_size
     if args.max_seq_len is not None:
         config.max_seq_len = args.max_seq_len
+    if args.device is not None:
+        config.device = args.device
 
     data = QwenDataModule(config, num_workers=0)
     data.setup("fit")
