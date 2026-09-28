@@ -74,4 +74,9 @@ def test_trainer_builds_muon_and_8bit_optimizers():
 
     assert len(optimizers) == 2
     assert optimizers[0].__class__.__name__ == "Muon"
-    assert optimizers[1].__class__.__name__ == "Adam8bit"
+    expected_optimizer = (
+        "Adam8bit"
+        if config.device == "cuda" and torch.cuda.is_available()
+        else "AdamW"
+    )
+    assert optimizers[1].__class__.__name__ == expected_optimizer
