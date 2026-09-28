@@ -7,7 +7,7 @@ from src.configs.model_config import ModelConfig
 from src.neuralnet.transformer import TransformerBlock
 
 
-class QwenLLM(nn.Module):
+class Qwen3LLM(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config

@@ -1,26 +1,28 @@
-# Model Architecture
-## Layers Parameters
+## Model Architecture
+# Layers Parameters
 d_model: 512
 n_heads: 8
 n_layers: 6
 d_ff: 1536
 
-## Attention Parameters
+# Attention Parameters
 n_kv_heads: 4
 sliding_window: 4096
 attention_bias: False
 rms_norm_eps: 1e-6
-
-# Train Parameters
-gradient_accumulation_steps: 1
-muon_lr: 0.01
 
 # Data Parameters
 max_seq_len: 1024
 num_documents: 5000
 max_tokens: 500000
 
-# Eval
+# Train Parameters
+batch_size: 8
+max_steps: 100000
+gradient_accumulation_steps: 1
+muon_lr: 0.01
+
+# Eval Parameters
 eval_every: 1000
 eval_steps: 250
 

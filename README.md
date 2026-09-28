@@ -74,73 +74,7 @@ flowchart TD
         ADD2 --> TB1_OUT["Output X"]
     end
 
-    TB1 --> TB2
-
-    subgraph TB2["Transformer Block 2"]
-        direction TB
-
-        TB2_IN["Input X"] --> TB2_N1["RMSNorm"]
-        TB2_N1 --> ATTN2
-
-        subgraph ATTN2["Qwen3 Attention"]
-            direction TB
-
-            A2["Normalized X"]
-            A2 --> Q2["Q_proj"]
-            A2 --> K2["K_proj"]
-            A2 --> V2["V_proj"]
-
-            Q2 --> QR2["Reshape Q"]
-            K2 --> KR2["Reshape K"]
-            V2 --> VR2["Reshape V"]
-
-            QR2 --> QN2["Q_norm"]
-            KR2 --> KN2["K_norm"]
-
-            QN2 --> RQ2["RoPE Q"]
-            KN2 --> RK2["RoPE K"]
-
-            VR2 --> KV2["Repeat KV Heads"]
-            RK2 --> KV2
-
-            RQ2 --> SDPA2["Scaled Dot-Product Attention"]
-            KV2 --> SDPA2
-
-            SDPA2 --> AO2["Attention Output"]
-            AO2 --> RO2["Reshape"]
-            RO2 --> WO2["W_o"]
-            WO2 --> ATTNO2["Attention Output"]
-        end
-
-        ATTNO2 --> D2["Dropout"]
-        TB2_IN --> ADD3["+"]
-        D2 --> ADD3
-
-        ADD3 --> TB2_N2["RMSNorm"]
-        TB2_N2 --> FF2
-
-        subgraph FF2["SwiGLU FeedForward"]
-            direction TB
-
-            FFI2["Normalized X"]
-            FFI2 --> GP2["Gate_proj"]
-            FFI2 --> UP2["Up_proj"]
-
-            GP2 --> SILU2["SiLU"]
-            SILU2 --> MUL2["Element-wise Multiply"]
-            UP2 --> MUL2
-
-            MUL2 --> DO2["Dropout"]
-            DO2 --> DP2["Down_proj"]
-            DP2 --> FFO2["FFN Output"]
-        end
-
-        FFO2 --> ADD4["+"]
-        ADD3 --> ADD4
-        ADD4 --> TB2_OUT["Output X"]
-    end
-
-    TB2 --> MORE["⋮"]
+    TB1 --> MORE["⋮"]
     MORE --> TBN["Transformer Block N"]
 
     TBN --> FINAL_NORM["Final RMSNorm"]
@@ -151,6 +85,5 @@ flowchart TD
     style A fill:#f9f,stroke:#333,stroke-width:2px
     style B fill:#bbf,stroke:#333,stroke-width:2px
     style TB1_OUT fill:#f9f,stroke:#333,stroke-width:2px
-    style TB2_OUT fill:#f9f,stroke:#333,stroke-width:2px
     style LOGITS fill:#f9f,stroke:#333,stroke-width:2px
 ```

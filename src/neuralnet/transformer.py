@@ -9,7 +9,11 @@ class TransformerBlock(nn.Module):
     def __init__(self, config: ModelConfig):  # Pass the entire config object
         super().__init__()
         self.attention = GroupedQueryAttention(config)
-        self.feed_forward = SwiGLUFeedForward(config.d_model, config.d_ff, config.dropout)
+        self.feed_forward = SwiGLUFeedForward(
+            config.d_model,
+            config.d_ff,
+            config.dropout
+        )
         self.norm1 = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
         self.norm2 = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
         self.dropout = nn.Dropout(config.dropout)

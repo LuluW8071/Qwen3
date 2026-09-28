@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 from src.configs.logging import logger
 from src.configs.model_config import ModelConfig
-from src.neuralnet.rotatory_pos_embed import RoPE
+from src.neuralnet.rotatory_pos_embed import RotaryPositionalEmbeddings as RoPE
 
 
 def repeat_kv_heads(
