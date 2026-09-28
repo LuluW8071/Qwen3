@@ -47,6 +47,13 @@ def test_text_token_dataset_shifts_targets_by_one():
     assert targets.tolist() == [3, 4, 5]
 
 
+def test_model_config_coerces_rms_norm_eps_string():
+    config = make_config(rms_norm_eps="1e-6")
+
+    assert config.rms_norm_eps == 1e-6
+    assert isinstance(config.rms_norm_eps, float)
+
+
 def test_data_module_splits_cached_tokens_deterministically(monkeypatch):
     config = make_config(max_seq_len=4)
     monkeypatch.setattr(
