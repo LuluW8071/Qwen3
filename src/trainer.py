@@ -14,13 +14,22 @@ from src.optim.muon import Muon
 class QwenTrainer(pl.LightningModule):
     """Train/Validates the Qwen3 LLM with Muon Optimizer Loss Fn"""
 
-    def __init__(self, model: nn.Module, config: ModelConfig, num_gpus: int = 1):
+    def __init__(
+        self,
+        model: nn.Module,
+        config: ModelConfig,
+        num_gpus: int = 1,
+        use_8bit_optimizer: bool | None = None,
+    ):
         super().__init__()
 
         self.model = model
         self.config = config
         self.automatic_optimization = False
         self._accumulated_batches = 0
+        self.use_8bit_optimizer = (
+            config.device == "cuda" if use_8bit_optimizer is None else use_8bit_optimizer
+        )
 
         self.save_hyperparameters(ignore=["model", "config"])
         self.sync_dist = num_gpus > 1
@@ -52,7 +61,7 @@ class QwenTrainer(pl.LightningModule):
             lr=config.muon_lr,
             momentum=0.95
         )
-        if config.device == "cuda" and torch.cuda.is_available():
+        if self.use_8bit_optimizer and config.device == "cuda" and torch.cuda.is_available():
             try:
                 import bitsandbytes as bnb
             except ImportError as exc:

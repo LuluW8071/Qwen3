@@ -87,3 +87,13 @@ def test_trainer_builds_muon_and_8bit_optimizers():
         else "AdamW"
     )
     assert optimizers[1].__class__.__name__ == expected_optimizer
+
+
+def test_trainer_uses_adamw_without_8bit_optimizer():
+    config = make_config(device="cuda")
+    model = nn.Sequential(nn.Embedding(config.vocab_size, config.d_model), nn.Linear(8, 16))
+    trainer = QwenTrainer(model, config, use_8bit_optimizer=False)
+
+    optimizers, _ = trainer.configure_optimizers()
+
+    assert optimizers[1].__class__.__name__ == "AdamW"
