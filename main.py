@@ -6,6 +6,7 @@ from pathlib import Path
 import lightning.pytorch as pl
 import torch
 import yaml
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 from src.configs.model_config import ModelConfig
 from src.data.dataloader import QwenDataModule
@@ -19,10 +20,18 @@ def parse_args() -> argparse.Namespace:
     # Configuration and device
     parser.add_argument("-c", "--config", default=Path("src/configs/example.yaml"), type=Path,
                         help="path to model configuration")
+    parser.add_argument("-g", "--gpus", default=1, type=int,
+                        help="number of GPUs to use")
+    parser.add_argument("-db", "--dist_backend", default="deepspeed_stage_2", type=str,
+                        help="distributed backend for multi-GPU training")
     parser.add_argument("-d", "--device", default=None, type=str,
                         help="training device: cpu or cuda")
     parser.add_argument("--precision", default="8bit", type=str,
                         help="training precision: 8bit or fp16")
+    parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
+                        help="directory for checkpoints")
+    parser.add_argument("--resume_checkpoint", "--resume-checkpoint", default=None, type=Path,
+                        help="checkpoint path to resume")
 
     # Training hyperparameters
     parser.add_argument("--max_steps", "--max-steps", default=None, type=int,
@@ -37,6 +46,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.gpus < 1:
+        raise ValueError("--gpus must be at least 1")
 
     with args.config.open() as file:
         config = ModelConfig(**yaml.safe_load(file))
@@ -53,6 +64,12 @@ def main() -> None:
     use_cuda = requested_device.startswith("cuda") or requested_device == "gpu"
     if use_cuda and not torch.cuda.is_available():
         raise RuntimeError("Config requests CUDA, but no CUDA device is available")
+    if use_cuda and args.gpus > torch.cuda.device_count():
+        raise RuntimeError(
+            f"Requested {args.gpus} GPUs, but only {torch.cuda.device_count()} are available"
+        )
+    if not use_cuda and args.gpus != 1:
+        raise ValueError("--gpus > 1 requires CUDA")
     if args.precision == "fp16" and not use_cuda:
         raise ValueError("--precision fp16 requires --device cuda")
     config.device = "cuda" if use_cuda else "cpu"
@@ -63,6 +80,7 @@ def main() -> None:
     lightning_module = QwenTrainer(
         model,
         config,
+        num_gpus=args.gpus if use_cuda else 1,
         use_8bit_optimizer=args.precision == "8bit",
     )
 
@@ -80,9 +98,19 @@ def main() -> None:
         )
     elif args.precision == "fp16":
         trainer_precision = "16-mixed"
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=args.checkpoint_dir,
+        filename="qwen3-step{step:06d}-val_loss{val_loss:.4f}",
+        monitor="val_loss",
+        mode="min",
+        save_top_k=3,
+        save_last=True,
+        auto_insert_metric_name=False,
+    )
     trainer = pl.Trainer(
         accelerator="gpu" if use_cuda else "cpu",
-        devices=1,
+        devices=args.gpus if use_cuda else 1,
+        strategy=args.dist_backend if use_cuda and args.gpus > 1 else "auto",
         max_epochs=-1,
         max_steps=config.max_steps,
         accumulate_grad_batches=1,
@@ -91,10 +119,15 @@ def main() -> None:
         val_check_interval=config.eval_every,
         plugins=plugins,
         precision=trainer_precision,
+        callbacks=[checkpoint_callback],
         logger=False,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
     )
-    trainer.fit(lightning_module, datamodule=data)
+    trainer.fit(
+        lightning_module,
+        datamodule=data,
+        ckpt_path=args.resume_checkpoint,
+    )
 
 
 if __name__ == "__main__":
