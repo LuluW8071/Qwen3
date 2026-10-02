@@ -29,12 +29,14 @@ class QwenDataModule(pl.LightningDataModule):
         self.validation_fraction = validation_fraction
         self.train_dataset: Optional[TextTokenDataset] = None
         self.val_dataset: Optional[TextTokenDataset] = None
+        self.tokenizer = None
 
     def setup(self, stage: str | None = None) -> None:
         if self.train_dataset is not None and self.val_dataset is not None:
             return
 
-        _, _, tokens = load_and_cache_data(self.config, self.cache_dir)
+        _, tokenizer, tokens = load_and_cache_data(self.config, self.cache_dir)
+        self.tokenizer = tokenizer
         dataset = TextTokenDataset(tokens, self.config.max_seq_len)
         if len(dataset) < 2:
             raise ValueError("Dataset needs at least two sequence samples")
