@@ -13,52 +13,74 @@ from src.data.dataloader import QwenDataModule
 from src.neuralnet.qwen import Qwen3LLM
 from src.trainer import QwenTrainer
 
+# Model and training hyperparameters live in the yaml config; the CLI only
+# carries what changes per launch. `device` is the one exception, because it is
+# hardware rather than experiment definition.
+CONFIG_OVERRIDES = {"device": str}
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train Qwen3 from scratch")
+PRECISION_TO_LIGHTNING = {
+    "32-true": "32-true",
+    "bf16-mixed": "bf16-mixed",
+    "fp16-mixed": "16-mixed",
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Train Qwen3 from scratch. Model and training hyperparameters "
+                    "come from the yaml config; this CLI only overrides per-launch "
+                    "settings.")
 
     # Configuration and device
-    parser.add_argument("-c", "--config", default=Path("src/configs/example.yaml"), type=Path,
+    parser.add_argument("-c", "--config", default=Path("src/configs/param.yaml"), type=Path,
                         help="path to model configuration")
     parser.add_argument("-g", "--gpus", default=1, type=int,
                         help="number of GPUs to use")
     parser.add_argument("-db", "--dist_backend", default="deepspeed_stage_2", type=str,
                         help="distributed backend for multi-GPU training")
     parser.add_argument("-d", "--device", default=None, type=str,
-                        help="training device: cpu or cuda")
-    parser.add_argument("--precision", default="8bit", type=str,
-                        help="training precision: 8bit or fp16")
+                        help="training device: cpu or cuda; overrides the yaml value")
+    parser.add_argument("--precision", default=None,
+                        choices=["32-true", "bf16-mixed", "fp16-mixed", "8bit"],
+                        help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used")
     parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
                         help="directory for checkpoints")
     parser.add_argument("--resume_checkpoint", "--resume-checkpoint", default=None, type=Path,
                         help="checkpoint path to resume")
 
-    # Training hyperparameters
-    parser.add_argument("--max_steps", "--max-steps", default=None, type=int,
-                        help="maximum number of optimizer steps")
-    parser.add_argument("--batch_size", "--batch-size", default=None, type=int,
-                        help="training batch size")
-    parser.add_argument("--max_seq_len", "--max-seq-len", default=None, type=int,
-                        help="maximum sequence length")
+    # Data plumbing
+    parser.add_argument("--cache_dir", "--cache-dir", default="data_cache", type=Path,
+                        help="directory holding the tokenized dataset cache")
+    parser.add_argument("--num_workers", "--num-workers", default=0, type=int,
+                        help="dataloader workers")
 
-    return parser.parse_args()
+    # Inference
+    parser.add_argument("--inference_every", "--inference-every", default=100, type=int,
+                        help="sample and score generations during validation every N steps")
+
+    return parser
 
 
-def main() -> None:
-    args = parse_args()
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def load_config(path: Path) -> ModelConfig:
+    with path.open() as file:
+        return ModelConfig(**yaml.safe_load(file))
+
+
+def apply_overrides(config: ModelConfig, args: argparse.Namespace) -> ModelConfig:
+    for name in CONFIG_OVERRIDES:
+        value = getattr(args, name, None)
+        if value is not None:
+            setattr(config, name, value)
+    return config
+
+
+def resolve_device(config: ModelConfig, args: argparse.Namespace) -> str:
     if args.gpus < 1:
         raise ValueError("--gpus must be at least 1")
-
-    with args.config.open() as file:
-        config = ModelConfig(**yaml.safe_load(file))
-    if args.max_steps is not None:
-        config.max_steps = args.max_steps
-    if args.batch_size is not None:
-        config.batch_size = args.batch_size
-    if args.max_seq_len is not None:
-        config.max_seq_len = args.max_seq_len
-    if args.device is not None:
-        config.device = args.device
 
     requested_device = str(config.device).lower()
     use_cuda = requested_device.startswith("cuda") or requested_device == "gpu"
@@ -70,23 +92,60 @@ def main() -> None:
         )
     if not use_cuda and args.gpus != 1:
         raise ValueError("--gpus > 1 requires CUDA")
-    if args.precision == "fp16" and not use_cuda:
-        raise ValueError("--precision fp16 requires --device cuda")
-    config.device = "cuda" if use_cuda else "cpu"
 
-    data = QwenDataModule(config, num_workers=0)
+    config.device = "cuda" if use_cuda else "cpu"
+    return config.device
+
+
+def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[str, bool]:
+    """Return the Lightning precision string and whether 8-bit weights are requested."""
+    use_cuda = config.device == "cuda"
+    precision = args.precision
+    if precision is None:
+        precision = "bf16-mixed" if use_cuda and config.use_amp else "32-true"
+
+    if precision == "8bit":
+        if not use_cuda:
+            raise ValueError("--precision 8bit requires --device cuda")
+        return "32-true", True
+    if precision == "fp16-mixed" and not use_cuda:
+        raise ValueError("--precision fp16-mixed requires --device cuda")
+    if precision == "bf16-mixed" and not use_cuda:
+        # bf16 autocast only exists on CUDA; fall back instead of crashing.
+        return "32-true", False
+    return PRECISION_TO_LIGHTNING[precision], False
+
+
+def main() -> None:
+    args = parse_args()
+    config = apply_overrides(load_config(args.config), args)
+    resolve_device(config, args)
+    trainer_precision, use_8bit = resolve_precision(config, args)
+
+    data = QwenDataModule(config, cache_dir=args.cache_dir, num_workers=args.num_workers)
     data.setup("fit")
+    if config.vocab_size != data.tokenizer.vocab_size:
+        raise ValueError(
+            f"--vocab_size {config.vocab_size} does not match tokenizer vocab "
+            f"{data.tokenizer.vocab_size}"
+        )
     model = Qwen3LLM(config)
     lightning_module = QwenTrainer(
         model,
         config,
-        num_gpus=args.gpus if use_cuda else 1,
-        use_8bit_optimizer=args.precision == "8bit",
+        muon_lr=config.muon_lr,
+        weight_decay=config.weight_decay,
+        batch_size=config.batch_size,
+        num_gpus=args.gpus if config.device == "cuda" else 1,
+        max_steps=config.max_steps,
+        vocab_size=config.vocab_size,
+        use_8bit_optimizer=use_8bit,
+        tokenizer=data.tokenizer,
+        inference_every=args.inference_every,
     )
 
     plugins = []
-    trainer_precision = "32-true"
-    if use_cuda and args.precision == "8bit":
+    if use_8bit:
         from lightning.pytorch.plugins import BitsandbytesPrecision
 
         plugins.append(
@@ -96,8 +155,6 @@ def main() -> None:
                 ignore_modules={"lm_head"},
             )
         )
-    elif args.precision == "fp16":
-        trainer_precision = "16-mixed"
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.checkpoint_dir,
         filename="qwen3-step{step:06d}-val_loss{val_loss:.4f}",
@@ -108,12 +165,14 @@ def main() -> None:
         auto_insert_metric_name=False,
     )
     trainer = pl.Trainer(
-        accelerator="gpu" if use_cuda else "cpu",
-        devices=args.gpus if use_cuda else 1,
-        strategy=args.dist_backend if use_cuda and args.gpus > 1 else "auto",
+        accelerator="gpu" if config.device == "cuda" else "cpu",
+        devices=args.gpus if config.device == "cuda" else 1,
+        strategy=args.dist_backend if config.device == "cuda" and args.gpus > 1 else "auto",
         max_epochs=-1,
         max_steps=config.max_steps,
-        accumulate_grad_batches=1,
+        accumulate_grad_batches=config.gradient_accumulation_steps,
+        gradient_clip_val=config.grad_clip,
+        gradient_clip_algorithm="norm",
         limit_val_batches=config.eval_steps,
         check_val_every_n_epoch=None,
         val_check_interval=config.eval_every,
