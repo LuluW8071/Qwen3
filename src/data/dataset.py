@@ -53,6 +53,7 @@ def load_and_cache_data(
         logger.info("Loading cached data from {}", cache_file)
         with cache_file.open("rb") as file:
             cached_data = pickle.load(file)
+
         texts = cached_data["texts"]
         tokenizer = cached_data["tokenizer"]
         tokens = cached_data["tokens"]
@@ -97,6 +98,8 @@ def load_and_cache_data(
         )
 
     config.vocab_size = tokenizer.vocab_size
+
+    # Cached processed data
     with cache_file.open("wb") as file:
         pickle.dump({"texts": texts, "tokenizer": tokenizer, "tokens": tokens}, file)
     logger.info("Cached {} tokens to {}", len(tokens), cache_file)
