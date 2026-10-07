@@ -44,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--precision", default=None,
                         choices=["32-true", "bf16-mixed", "fp16-mixed", "8bit"],
                         help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used")
+    parser.add_argument("--compile", action="store_true",
+                        help="compile the model with torch.compile")
     parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
                         help="directory for checkpoints")
     parser.add_argument("--resume_checkpoint", "--resume-checkpoint", default=None, type=Path,
@@ -147,6 +149,8 @@ def main() -> None:
             f"{data.tokenizer.vocab_size}"
         )
     model = Qwen3LLM(config)
+    if args.compile:
+        model = torch.compile(model)
     lightning_module = QwenTrainer(
         model,
         config,
