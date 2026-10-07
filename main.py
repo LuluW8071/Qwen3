@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import lightning.pytorch as pl
@@ -116,6 +117,22 @@ def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[st
     return PRECISION_TO_LIGHTNING[precision], False
 
 
+def build_logger():
+    """Enable Comet only when an API key is configured in the environment."""
+    api_key = os.getenv("COMET_API_KEY")
+    if not api_key:
+        return False
+
+    from lightning.pytorch.loggers import CometLogger
+
+    return CometLogger(
+        api_key=api_key,
+        project_name=os.getenv("COMET_PROJECT_NAME", "qwen3"),
+        workspace=os.getenv("COMET_WORKSPACE") or None,
+        experiment_key=os.getenv("COMET_EXPERIMENT_KEY") or None,
+    )
+
+
 def main() -> None:
     args = parse_args()
     config = apply_overrides(load_config(args.config), args)
@@ -179,7 +196,7 @@ def main() -> None:
         plugins=plugins,
         precision=trainer_precision,
         callbacks=[checkpoint_callback],
-        logger=False,
+        logger=build_logger(),
         enable_checkpointing=True,
     )
     trainer.fit(

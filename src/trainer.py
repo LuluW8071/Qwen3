@@ -265,11 +265,32 @@ class QwenTrainer(pl.LightningModule):
                     prompt,
                     text,
                 )
+                self._log_generation_to_comet(step, prompt, text, metrics)
                 results.append({"prompt": prompt, "text": text, **metrics})
         finally:
             if was_training:
                 self.train()
         return results
+
+    def _log_generation_to_comet(
+        self, step: int, prompt: str, text: str, metrics: dict[str, float]
+    ) -> None:
+        """Send generated text to Comet when the active Lightning logger supports it."""
+        trainer = getattr(self, "_trainer", None)
+        if trainer is None or not trainer.is_global_zero:
+            return
+
+        experiment = getattr(getattr(trainer, "logger", None), "experiment", None)
+        log_text = getattr(experiment, "log_text", None)
+        if log_text is None:
+            return
+
+        log_text(
+            text,
+            step=step,
+            name=f"generation/{step}/{prompt[:250]}",
+            metadata={"prompt": prompt, **metrics},
+        )
 
     def on_validation_epoch_end(self) -> None:
         """Log sample generations (with acc/ppl) every `inference_every` steps."""
