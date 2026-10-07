@@ -38,6 +38,19 @@ class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
         return x, y
 
 
+def _resolve_vocab_size(config: ModelConfig, tokenizer) -> None:
+    tokenizer_vocab_size = tokenizer.vocab_size
+    if config.vocab_size is None:
+        config.vocab_size = tokenizer_vocab_size
+        return
+    if config.vocab_size != tokenizer_vocab_size:
+        raise ValueError(
+            f"Configured vocab_size {config.vocab_size} does not match tokenizer "
+            f"vocab_size {tokenizer_vocab_size}. Use a matching tokenizer or set "
+            "vocab_size to null for automatic detection."
+        )
+
+
 def load_and_cache_data(
     config: ModelConfig,
     cache_dir: str | os.PathLike[str] = "data_cache",
@@ -45,8 +58,10 @@ def load_and_cache_data(
     """Load Cosmopedia text, tokenize it once, and reuse local cache afterward."""
     cache_path = Path(cache_dir)
     cache_path.mkdir(parents=True, exist_ok=True)
+    requested_vocab_size = config.vocab_size or "auto"
     cache_file = cache_path / (
-        f"tokenized_data_{config.num_documents}_{config.max_tokens}.pkl"
+        f"tokenized_data_{config.num_documents}_{config.max_tokens}_"
+        f"vocab{requested_vocab_size}.pkl"
     )
 
     if cache_file.exists():
@@ -57,7 +72,7 @@ def load_and_cache_data(
         texts = cached_data["texts"]
         tokenizer = cached_data["tokenizer"]
         tokens = cached_data["tokens"]
-        config.vocab_size = tokenizer.vocab_size
+        _resolve_vocab_size(config, tokenizer)
         logger.info("Loaded {} documents and {:,} tokens", len(texts), len(tokens))
         return texts, tokenizer, tokens
 
@@ -70,9 +85,7 @@ def load_and_cache_data(
         ) from exc
 
     logger.info("Processing new data; cache will be written to {}", cache_file)
-    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    base_tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
 
     dataset = load_dataset(
         "HuggingFaceTB/smollm-corpus",
@@ -86,6 +99,19 @@ def load_and_cache_data(
             break
         texts.append(item["text"][:3000])
 
+    if config.vocab_size is not None and config.vocab_size != base_tokenizer.vocab_size:
+        if not base_tokenizer.is_fast:
+            raise ValueError("Tokenizer must be fast to train a new vocabulary")
+        tokenizer = base_tokenizer.train_new_from_iterator(
+            texts,
+            vocab_size=config.vocab_size,
+            length=len(texts),
+        )
+    else:
+        tokenizer = base_tokenizer
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     all_tokens: list[int] = []
     for text in tqdm(texts, desc="Tokenizing"):
         all_tokens.extend(tokenizer.encode(text, add_special_tokens=False))
@@ -97,7 +123,7 @@ def load_and_cache_data(
             f"got {len(tokens)}."
         )
 
-    config.vocab_size = tokenizer.vocab_size
+    _resolve_vocab_size(config, tokenizer)
 
     # Cached processed data
     with cache_file.open("wb") as file:
