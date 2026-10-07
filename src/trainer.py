@@ -286,9 +286,8 @@ class QwenTrainer(pl.LightningModule):
             return
 
         log_text(
-            text,
+            text=text,
             step=step,
-            name=f"generation/{step}/{prompt[:250]}",
             metadata={"prompt": prompt, **metrics},
         )
 
@@ -297,6 +296,8 @@ class QwenTrainer(pl.LightningModule):
         if self.tokenizer is None or self.inference_every <= 0:
             return
         if not self.generation_config.prompts:
+            return
+        if self.trainer.sanity_checking:
             return
         if self.global_step % self.inference_every != 0:
             return
