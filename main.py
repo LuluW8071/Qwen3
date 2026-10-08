@@ -42,10 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-d", "--device", default=None, type=str,
                         help="training device: cpu or cuda; overrides the yaml value")
     parser.add_argument("--precision", default=None,
-                        choices=["32-true", "bf16-mixed", "fp16-mixed", "8bit"],
+                        choices=["32-true", "bf16-mixed", "fp16-mixed"],
                         help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used")
-    parser.add_argument("--use-8bit-optimizer", action="store_true",
-                        help="use bitsandbytes Adam8bit for Adam-managed parameters")
     parser.add_argument("--compile", action="store_true",
                         help="compile the model with torch.compile")
     parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
@@ -102,34 +100,19 @@ def resolve_device(config: ModelConfig, args: argparse.Namespace) -> str:
     return config.device
 
 
-def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[str | None, bool]:
-    """Return the Lightning precision string and whether 8-bit weights are requested."""
+def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> str:
+    """Resolve the Lightning precision string for this device."""
     use_cuda = config.device == "cuda"
     precision = args.precision
     if precision is None:
         precision = "bf16-mixed" if use_cuda and config.use_amp else "32-true"
 
-    if precision == "8bit":
-        if not use_cuda:
-            raise ValueError("--precision 8bit requires --device cuda")
-        # BitsandbytesPrecision is itself a Lightning precision plugin; passing
-        # an explicit precision value alongside it raises a configuration error.
-        return None, True
     if precision == "fp16-mixed" and not use_cuda:
         raise ValueError("--precision fp16-mixed requires --device cuda")
     if precision == "bf16-mixed" and not use_cuda:
         # bf16 autocast only exists on CUDA; fall back instead of crashing.
-        return "32-true", False
-    return PRECISION_TO_LIGHTNING[precision], False
-
-
-def resolve_8bit_optimizer(
-    config: ModelConfig, args: argparse.Namespace, use_8bit_precision: bool = False
-) -> bool:
-    use_8bit_optimizer = use_8bit_precision or args.use_8bit_optimizer
-    if use_8bit_optimizer and config.device != "cuda":
-        raise ValueError("8-bit optimizer requires --device cuda")
-    return use_8bit_optimizer
+        return "32-true"
+    return PRECISION_TO_LIGHTNING[precision]
 
 
 def build_logger():
@@ -152,8 +135,7 @@ def main() -> None:
     args = parse_args()
     config = apply_overrides(load_config(args.config), args)
     resolve_device(config, args)
-    trainer_precision, use_8bit = resolve_precision(config, args)
-    use_8bit_optimizer = resolve_8bit_optimizer(config, args, use_8bit)
+    trainer_precision = resolve_precision(config, args)
 
     data = QwenDataModule(config, cache_dir=args.cache_dir, num_workers=args.num_workers)
     data.setup("fit")
@@ -174,22 +156,10 @@ def main() -> None:
         num_gpus=args.gpus if config.device == "cuda" else 1,
         max_steps=config.max_steps,
         vocab_size=config.vocab_size,
-        use_8bit_optimizer=use_8bit_optimizer,
         tokenizer=data.tokenizer,
         inference_every=args.inference_every,
     )
 
-    plugins = []
-    if use_8bit:
-        from lightning.pytorch.plugins import BitsandbytesPrecision
-
-        plugins.append(
-            BitsandbytesPrecision(
-                mode="int8-training",
-                dtype=torch.float16,
-                ignore_modules={"lm_head"},
-            )
-        )
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.checkpoint_dir,
         filename="qwen3-step{step:06d}-val_loss{val_loss:.4f}",
@@ -211,7 +181,6 @@ def main() -> None:
         limit_val_batches=config.eval_steps,
         check_val_every_n_epoch=None,
         val_check_interval=config.eval_every,
-        plugins=plugins,
         precision=trainer_precision,
         callbacks=[checkpoint_callback],
         logger=build_logger(),

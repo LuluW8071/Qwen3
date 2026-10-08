@@ -11,7 +11,6 @@ dependencies = [
     "pyyaml>=6.0",
     "datasets>=5.0.1",
     "transformers>=5.17.0",
-    "bitsandbytes>=0.50.2",
     "comet-ml>=3.53.0",
 ]
 

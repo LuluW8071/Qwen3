@@ -170,15 +170,6 @@ def test_trainer_adamw_lr_is_a_tenth_of_muon_lr():
     assert adam.param_groups[0]["weight_decay"] == 0.2
 
 
-def test_trainer_uses_adamw_without_8bit_optimizer():
-    config = make_config(device="cuda")
-    trainer = QwenTrainer(make_model(config), config, use_8bit_optimizer=False)
-
-    optimizers = trainer.configure_optimizers()["optimizer"].optimizers
-
-    assert optimizers[1].__class__.__name__ == "AdamW"
-
-
 def test_trainer_sends_only_hidden_weights_to_muon():
     config = make_config()
     trainer = QwenTrainer(make_model(config), config)
@@ -212,7 +203,7 @@ def test_arg_parser_only_exposes_launch_flags():
     assert dests & yaml_fields == {"device"}
     assert {"config", "gpus", "dist_backend", "precision", "checkpoint_dir",
             "resume_checkpoint", "cache_dir", "num_workers",
-            "inference_every", "use_8bit_optimizer"} <= dests
+            "inference_every"} <= dests
 
 
 @pytest.mark.parametrize(
@@ -273,17 +264,16 @@ def test_precision_defaults_to_bf16_with_amp_on_cuda(monkeypatch):
     monkeypatch.setattr(main.torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(main.torch.cuda, "device_count", lambda: 8)
 
-    precision, use_8bit = main.resolve_precision(config, main.parse_args([]))
+    precision = main.resolve_precision(config, main.parse_args([]))
 
     assert precision == "bf16-mixed"
-    assert use_8bit is False
 
 
 def test_precision_falls_back_to_fp32_without_amp(monkeypatch):
     config = make_config(device="cuda", use_amp=False)
     monkeypatch.setattr(main.torch.cuda, "is_available", lambda: True)
 
-    precision, _ = main.resolve_precision(config, main.parse_args([]))
+    precision = main.resolve_precision(config, main.parse_args([]))
 
     assert precision == "32-true"
 
@@ -294,46 +284,6 @@ def test_precision_rejects_fp16_on_cpu():
 
     with pytest.raises(ValueError):
         main.resolve_precision(config, args)
-
-
-def test_precision_rejects_8bit_on_cpu():
-    config = make_config(device="cpu")
-    args = main.parse_args(["--precision", "8bit"])
-
-    with pytest.raises(ValueError):
-        main.resolve_precision(config, args)
-
-
-def test_precision_8bit_uses_precision_plugin_without_precision_flag(monkeypatch):
-    config = make_config(device="cuda")
-    monkeypatch.setattr(main.torch.cuda, "is_available", lambda: True)
-    args = main.parse_args(["--precision", "8bit"])
-
-    precision, use_8bit = main.resolve_precision(config, args)
-
-    assert precision is None
-    assert use_8bit is True
-
-
-def test_fp16_mixed_can_use_8bit_adam_optimizer(monkeypatch):
-    config = make_config(device="cuda")
-    monkeypatch.setattr(main.torch.cuda, "is_available", lambda: True)
-    args = main.parse_args(["--precision", "fp16-mixed", "--use-8bit-optimizer"])
-
-    precision, use_8bit_weights = main.resolve_precision(config, args)
-    use_8bit_optimizer = main.resolve_8bit_optimizer(config, args, use_8bit_weights)
-
-    assert precision == "16-mixed"
-    assert use_8bit_weights is False
-    assert use_8bit_optimizer is True
-
-
-def test_8bit_optimizer_rejects_cpu():
-    config = make_config(device="cpu")
-    args = main.parse_args(["--use-8bit-optimizer"])
-
-    with pytest.raises(ValueError, match="requires --device cuda"):
-        main.resolve_8bit_optimizer(config, args)
 
 
 def test_checkpoint_filename_renders_step_and_metric():

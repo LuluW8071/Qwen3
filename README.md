@@ -7,7 +7,6 @@ PyTorch Lightning. Project includes:
 - RMSNorm and SwiGLU feed-forward blocks
 - Tied token embedding and language-model head
 - Muon optimizer for matrix parameters
-- Bitsandbytes `int8-training` and `Adam8bit`
 - Cached Hugging Face tokenization and deterministic train/validation split
 
 This repository is an educational implementation, not an official Qwen3
@@ -17,7 +16,6 @@ checkpoint or reproduction of Qwen3 production architecture.
 
 - Linux
 - Python `>=3.14`
-- NVIDIA GPU with CUDA for Bitsandbytes INT8 training
 - Hugging Face network access on first data preparation
 
 Install dependencies with `uv`:
@@ -26,8 +24,7 @@ Install dependencies with `uv`:
 uv sync
 ```
 
-CPU execution is possible only after removing the Bitsandbytes plugin and
-8-bit optimizer from the training path. The default configuration targets CUDA.
+CPU execution is supported. The default configuration targets CUDA.
 
 ## Project Layout
 
@@ -66,11 +63,6 @@ Command-line overrides:
 - `--max-steps`: training-step limit
 - `--batch-size`: per-device batch size
 - `--max-seq-len`: token sequence length
-
-The entrypoint configures Lightning `BitsandbytesPrecision` with
-`mode="int8-training"` and `dtype=torch.float16`. Linear weights use INT8
-storage while forward and backward computation use floating point. The
-non-Muon parameter group uses `bitsandbytes.optim.Adam8bit`.
 
 ## T4 Configuration
 

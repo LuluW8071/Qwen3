@@ -138,7 +138,6 @@ class QwenTrainer(pl.LightningModule):
         tokenizer=None,
         generation_config: GenerationConfig | None = None,
         inference_every: int = 100,
-        use_8bit_optimizer: bool | None = None
     ):
         super().__init__()
         self.model = model
@@ -151,7 +150,6 @@ class QwenTrainer(pl.LightningModule):
         self.tokenizer = tokenizer
         self.generation_config = generation_config or GenerationConfig()
         self.inference_every = inference_every
-        self.use_8bit_optimizer = use_8bit_optimizer
         if self.vocab_size is None:
             raise ValueError("vocab_size must be set on the config or passed in")
         if not self.generation_config.prompts:
@@ -186,14 +184,7 @@ class QwenTrainer(pl.LightningModule):
             "eps": 1e-8,
             "weight_decay": self.weight_decay,
         }
-        if self.use_8bit_optimizer:
-            if not torch.cuda.is_available():
-                raise RuntimeError("8-bit optimizer requires CUDA")
-            import bitsandbytes as bnb
-
-            adam = bnb.optim.Adam8bit(adamw_params, **adam_kwargs)
-        else:
-            adam = optim.AdamW(adamw_params, **adam_kwargs)
+        adam = optim.AdamW(adamw_params, **adam_kwargs)
 
         return HybridOptimizer(muon, adam)
 
