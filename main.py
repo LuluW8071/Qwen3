@@ -44,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--precision", default=None,
                         choices=["32-true", "bf16-mixed", "fp16-mixed", "8bit"],
                         help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used")
+    parser.add_argument("--use-8bit-optimizer", action="store_true",
+                        help="use bitsandbytes Adam8bit for Adam-managed parameters")
     parser.add_argument("--compile", action="store_true",
                         help="compile the model with torch.compile")
     parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
@@ -121,6 +123,15 @@ def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[st
     return PRECISION_TO_LIGHTNING[precision], False
 
 
+def resolve_8bit_optimizer(
+    config: ModelConfig, args: argparse.Namespace, use_8bit_precision: bool = False
+) -> bool:
+    use_8bit_optimizer = use_8bit_precision or args.use_8bit_optimizer
+    if use_8bit_optimizer and config.device != "cuda":
+        raise ValueError("8-bit optimizer requires --device cuda")
+    return use_8bit_optimizer
+
+
 def build_logger():
     """Enable Comet only when an API key is configured in the environment."""
     api_key = os.getenv("COMET_API_KEY")
@@ -142,6 +153,7 @@ def main() -> None:
     config = apply_overrides(load_config(args.config), args)
     resolve_device(config, args)
     trainer_precision, use_8bit = resolve_precision(config, args)
+    use_8bit_optimizer = resolve_8bit_optimizer(config, args, use_8bit)
 
     data = QwenDataModule(config, cache_dir=args.cache_dir, num_workers=args.num_workers)
     data.setup("fit")
@@ -162,7 +174,7 @@ def main() -> None:
         num_gpus=args.gpus if config.device == "cuda" else 1,
         max_steps=config.max_steps,
         vocab_size=config.vocab_size,
-        use_8bit_optimizer=use_8bit,
+        use_8bit_optimizer=use_8bit_optimizer,
         tokenizer=data.tokenizer,
         inference_every=args.inference_every,
     )
