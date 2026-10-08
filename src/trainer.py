@@ -180,19 +180,20 @@ class QwenTrainer(pl.LightningModule):
 
         muon = Muon(muon_params, lr=self.muon_lr, momentum=0.95)
 
-        # if self.use_8bit_optimizer and torch.cuda.is_available():
-        #     import bitsandbytes as bnb  # ImportError surfaces naturally
-        #     adam = bnb.optim.Adam8bit(
-        #         adamw_params, lr=cfg.muon_lr * 0.1, weight_decay=cfg.weight_decay)
-        # else:
+        adam_kwargs = {
+            "lr": self.muon_lr * 0.1,
+            "betas": (0.9, 0.975),
+            "eps": 1e-8,
+            "weight_decay": self.weight_decay,
+        }
+        if self.use_8bit_optimizer:
+            if not torch.cuda.is_available():
+                raise RuntimeError("8-bit optimizer requires CUDA")
+            import bitsandbytes as bnb
 
-        adam = optim.AdamW(
-            adamw_params, 
-            lr=self.muon_lr *0.1, 
-            betas=(0.9, 0.975),
-            eps=1e-8,
-            weight_decay=self.weight_decay,
-        )
+            adam = bnb.optim.Adam8bit(adamw_params, **adam_kwargs)
+        else:
+            adam = optim.AdamW(adamw_params, **adam_kwargs)
 
         return HybridOptimizer(muon, adam)
 
