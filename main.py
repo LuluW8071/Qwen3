@@ -100,7 +100,7 @@ def resolve_device(config: ModelConfig, args: argparse.Namespace) -> str:
     return config.device
 
 
-def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[str, bool]:
+def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[str | None, bool]:
     """Return the Lightning precision string and whether 8-bit weights are requested."""
     use_cuda = config.device == "cuda"
     precision = args.precision
@@ -110,7 +110,9 @@ def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> tuple[st
     if precision == "8bit":
         if not use_cuda:
             raise ValueError("--precision 8bit requires --device cuda")
-        return "32-true", True
+        # BitsandbytesPrecision is itself a Lightning precision plugin; passing
+        # an explicit precision value alongside it raises a configuration error.
+        return None, True
     if precision == "fp16-mixed" and not use_cuda:
         raise ValueError("--precision fp16-mixed requires --device cuda")
     if precision == "bf16-mixed" and not use_cuda:

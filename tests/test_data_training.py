@@ -304,6 +304,17 @@ def test_precision_rejects_8bit_on_cpu():
         main.resolve_precision(config, args)
 
 
+def test_precision_8bit_uses_precision_plugin_without_precision_flag(monkeypatch):
+    config = make_config(device="cuda")
+    monkeypatch.setattr(main.torch.cuda, "is_available", lambda: True)
+    args = main.parse_args(["--precision", "8bit"])
+
+    precision, use_8bit = main.resolve_precision(config, args)
+
+    assert precision is None
+    assert use_8bit is True
+
+
 def test_checkpoint_filename_renders_step_and_metric():
     template = "qwen3-step{step:06d}-val_loss{val_loss:.4f}"
 
