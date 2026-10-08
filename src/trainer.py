@@ -18,9 +18,11 @@ from src.optim.hybridoptim import HybridOptimizer
 IGNORE_INDEX = -100
 
 DEFAULT_INFERENCE_PROMPTS = (
-    "The",
-    "Once upon a time",
-    "In a distant galaxy",
+    "Once upon a time, in a small village surrounded by mountains",
+    "In a distant galaxy, far beyond the reach of human civilization",
+    "In the beginning, there was nothing but darkness and silence",
+    "Artificial intelligence is transforming the way people work, learn, and communicate",
+    "The future of technology depends on how we understand and use it",
 )
 
 
@@ -29,9 +31,9 @@ class GenerationConfig:
     """Sampling knobs for the validation-time inference engine."""
 
     prompts: tuple[str, ...] = DEFAULT_INFERENCE_PROMPTS
-    max_new_tokens: int = 60
-    temperature: float = 0.8
-    top_k: int = 50
+    max_new_tokens: int = 256
+    temperature: float = 0.7
+    top_k: int = 40
     top_p: float = 0.9
     greedy: bool = False
 
