@@ -120,7 +120,7 @@ def test_data_module_splits_cached_tokens_deterministically(monkeypatch):
 
     assert len(first.train_dataset) == len(second.train_dataset)
     assert len(first.val_dataset) == len(second.val_dataset)
-    assert first.train_dataset.indices == second.train_dataset.indices
+    assert (first.train_dataset.indices == second.train_dataset.indices).all()
 
 
 def test_data_module_exposes_tokenizer_for_generation(monkeypatch):

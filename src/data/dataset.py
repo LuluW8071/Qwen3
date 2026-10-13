@@ -5,6 +5,7 @@ import pickle
 from pathlib import Path
 from typing import Any, List
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 try:
@@ -27,7 +28,9 @@ class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     def __init__(self, tokens: List[int], seq_len: int = 512):
         if seq_len < 1:
             raise ValueError("seq_len must be positive")
-        self.tokens = tokens
+        # int32 array: a Python list of 100M+ ints costs ~5 GB per process and per worker
+        # keep ndarrays (incl. memmaps) as-is so a mapped cache is never copied into RAM
+        self.tokens = tokens if isinstance(tokens, np.ndarray) else np.asarray(tokens, dtype=np.int32)
         self.seq_len = seq_len
 
     def __len__(self) -> int:
@@ -35,11 +38,8 @@ class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         start = index
-        x = torch.tensor(self.tokens[start:start + self.seq_len], dtype=torch.long)
-        y = torch.tensor(
-            self.tokens[start + 1:start + self.seq_len + 1], dtype=torch.long
-        )
-        return x, y
+        window = self.tokens[start:start + self.seq_len + 1].astype(np.int64)
+        return torch.from_numpy(window[:-1]), torch.from_numpy(window[1:])
 
 
 def _resolve_vocab_size(config: ModelConfig, tokenizer) -> None:
@@ -68,6 +68,8 @@ def load_and_cache_data(
         f"vocab{requested_vocab_size}_tokenizers.pkl"
     )
 
+    tokens_file = cache_file.with_suffix(".tokens.npy")
+
     if cache_file.exists():
         logger.info("Loading cached data from {}", cache_file)
         with cache_file.open("rb") as file:
@@ -76,6 +78,10 @@ def load_and_cache_data(
         texts = cached_data["texts"]
         tokenizer = TextTokenizer.from_json(cached_data["tokenizer_json"])
         tokens = cached_data["tokens"]
+        if tokens is None:  # new format: tokens live in a memory-mapped .npy beside the pickle
+            tokens = np.load(tokens_file, mmap_mode="r")
+        elif not isinstance(tokens, np.ndarray):  # old format: Python list, convert once
+            tokens = np.asarray(tokens, dtype=np.int32)
         _resolve_vocab_size(config, tokenizer)
         logger.info("Loaded {} documents and {:,} tokens", len(texts), len(tokens))
         return texts, tokenizer, tokens
@@ -106,13 +112,13 @@ def load_and_cache_data(
     else:
         tokenizer = base_tokenizer
 
-    all_tokens: list[int] = []
+    chunks: list[np.ndarray] = []
     batch_size = 256
     for start in tqdm(range(0, len(texts), batch_size), desc="Tokenizing"):
         for ids in tokenizer.encode_batch(texts[start:start + batch_size]):
-            all_tokens.extend(ids)
+            chunks.append(np.asarray(ids, dtype=np.int32))
 
-    tokens = all_tokens[:config.max_tokens]
+    tokens = np.concatenate(chunks)[:config.max_tokens]
     if len(tokens) <= config.max_seq_len:
         raise ValueError(
             f"Need more than max_seq_len ({config.max_seq_len}) tokens; "
@@ -121,10 +127,12 @@ def load_and_cache_data(
 
     _resolve_vocab_size(config, tokenizer)
 
-    # Cached processed data
+    # Cached processed data; tokens go to a .npy so every rank/worker can mmap them
+    np.save(tokens_file, tokens.astype(np.uint16 if tokenizer.vocab_size < 2**16 else np.int32))
     with cache_file.open("wb") as file:
         pickle.dump(
-            {"texts": texts, "tokenizer_json": tokenizer.to_json(), "tokens": tokens}, file
+            {"texts": texts, "tokenizer_json": tokenizer.to_json(), "tokens": None}, file
         )
+    tokens = np.load(tokens_file, mmap_mode="r")
     logger.info("Cached {} tokens to {}", len(tokens), cache_file)
     return texts, tokenizer, tokens

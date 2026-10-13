@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
+import numpy as np
 import torch
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 import lightning.pytorch as pl
 
 from src.configs.model_config import ModelConfig
@@ -46,11 +47,11 @@ class QwenDataModule(pl.LightningDataModule):
         if train_size < 1:
             raise ValueError("Dataset needs at least one training sample")
 
-        self.train_dataset, self.val_dataset = random_split(
-            dataset,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(42),
-        )
+        # numpy index arrays: random_split would materialize Python int lists (GBs at 100M+ samples)
+        perm = torch.randperm(len(dataset), generator=torch.Generator().manual_seed(42))
+        perm = perm.numpy().astype(np.int32)
+        self.train_dataset = Subset(dataset, perm[:train_size])
+        self.val_dataset = Subset(dataset, perm[train_size:])
 
     def _loader(self, dataset, shuffle: bool) -> DataLoader:
         return DataLoader(
