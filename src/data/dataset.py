@@ -18,6 +18,9 @@ from src.configs.model_config import ModelConfig
 from src.data.tokenizer import TextTokenizer
 
 
+TOKENIZER_TRAIN_DOCS = 100_000
+
+
 class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     """Turn one contiguous token stream into next-token prediction samples."""
 
@@ -98,7 +101,8 @@ def load_and_cache_data(
         texts.append(item["text"][:3000])
 
     if config.vocab_size is not None and config.vocab_size != base_tokenizer.vocab_size:
-        tokenizer = base_tokenizer.train_new(texts, config.vocab_size)
+        # BPE merges converge long before 500k docs; training on a prefix keeps this step fast.
+        tokenizer = base_tokenizer.train_new(texts[:TOKENIZER_TRAIN_DOCS], config.vocab_size)
     else:
         tokenizer = base_tokenizer
 
