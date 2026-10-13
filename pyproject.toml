@@ -31,6 +31,8 @@ torch = { index = "pytorch-cu126" }
 # feature/muon fork (Muon8bit), pinned to a commit; builds from source (needs nvcc + cmake)
 bitsandbytes = { git = "https://github.com/theblackcat102/bitsandbytes", rev = "c80d430a002edd3ef403a128ba3927e6c02a6417" }
 
-# The fork builds CPU-only by default; build the CUDA backend (89 = RTX 40xx, change for other GPUs).
+# The fork builds CPU-only by default; build the CUDA backend for T4 (75), A100 (80), RTX 30xx (86)
+# and RTX 40xx (89). Leaving COMPUTE_CAPABILITY unset auto-picks archs the toolkit may reject.
+# Add 90 for H100 if your nvcc supports it. CMAKE_ARGS is shell-quoted, so ";" lists survive.
 [tool.uv.extra-build-variables]
-bitsandbytes = { SKBUILD_CMAKE_ARGS = "-DCOMPUTE_BACKEND=cuda;-DCOMPUTE_CAPABILITY=89" }
+bitsandbytes = { CMAKE_ARGS = "-DCOMPUTE_BACKEND=cuda '-DCOMPUTE_CAPABILITY=75;80;86;89'" }
