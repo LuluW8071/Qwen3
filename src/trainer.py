@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 
 import torch
@@ -16,6 +17,28 @@ from src.optim.muon import Muon
 from src.optim.hybridoptim import HybridOptimizer
 
 IGNORE_INDEX = -100
+
+# adamw:     custom Muon + torch AdamW (original behavior, default)
+# muon32:    bnb Muon32bit + torch AdamW (same-update-rule fp32 baseline for muon8bit)
+# 8bit:      bnb Muon8bit + bnb AdamW8bit, both optimizers 8-bit (needs the feature/muon bitsandbytes fork)
+OPTIMIZER_CHOICES = ("adamw", "muon32", "8bit")
+
+
+def split_param_groups(named_params):
+    """Split (name, param) pairs into (muon, adamw) lists of (name, param).
+
+    Muon only gets 2D hidden weight matrices; the (tied) embedding and every
+    norm/1D tensor goes to AdamW.
+    """
+    muon, adamw = [], []
+    for name, p in named_params:
+        if not p.requires_grad:
+            continue
+        if p.ndim == 2 and "token_embedding" not in name and "norm" not in name:
+            muon.append((name, p))
+        else:
+            adamw.append((name, p))
+    return muon, adamw
 
 DEFAULT_INFERENCE_PROMPTS = (
     "Once upon a time, in a small village surrounded by mountains",
@@ -138,8 +161,12 @@ class QwenTrainer(pl.LightningModule):
         tokenizer=None,
         generation_config: GenerationConfig | None = None,
         inference_every: int = 100,
+        optimizer: str = "adamw",
     ):
         super().__init__()
+        if optimizer not in OPTIMIZER_CHOICES:
+            raise ValueError(f"optimizer must be one of {OPTIMIZER_CHOICES}, got {optimizer!r}")
+        self.optimizer_name = optimizer
         self.model = model
         self.config = config
         self.muon_lr = muon_lr
@@ -164,19 +191,18 @@ class QwenTrainer(pl.LightningModule):
         return self.model(x)
 
     def _build_optimizer(self) -> HybridOptimizer:
-        muon_params, adamw_params = [], []
-        for name, p in self.named_parameters():
-            if not p.requires_grad:
-                continue
-            if p.ndim == 2 and "token_embedding" not in name and "norm" not in name:
-                muon_params.append(p)
-            else:
-                adamw_params.append(p)
+        muon_named, adamw_named = split_param_groups(self.named_parameters())
+        muon_params = [p for _, p in muon_named]
+        adamw_params = [p for _, p in adamw_named]
 
-        logger.info("Muon params: {}", sum(p.numel() for p in muon_params))
-        logger.info("AdamW params: {}", sum(p.numel() for p in adamw_params))
-
-        muon = Muon(muon_params, lr=self.muon_lr, momentum=0.95)
+        for label, named in (("muon", muon_named), ("adamw", adamw_named)):
+            for name, p in named:
+                logger.info("[{}] {} {} numel={:,}", label, name, tuple(p.shape), p.numel())
+        logger.info("Optimizer: {}", self.optimizer_name)
+        logger.info("Muon params: {} tensors, {:,} numel", len(muon_params),
+                    sum(p.numel() for p in muon_params))
+        logger.info("AdamW params: {} tensors, {:,} numel", len(adamw_params),
+                    sum(p.numel() for p in adamw_params))
 
         adam_kwargs = {
             "lr": self.muon_lr * 0.1,
@@ -184,7 +210,28 @@ class QwenTrainer(pl.LightningModule):
             "eps": 1e-8,
             "weight_decay": self.weight_decay,
         }
-        adam = optim.AdamW(adamw_params, **adam_kwargs)
+
+        if self.optimizer_name == "adamw":
+            muon = Muon(muon_params, lr=self.muon_lr, momentum=0.95)
+        else:
+            import bitsandbytes as bnb
+
+            # The fork's Muon scales its update to match AdamW RMS (adjust_lr="rms_norm"),
+            # so it takes an AdamW-scale lr rather than muon_lr.
+            muon_cls = bnb.optim.Muon8bit if self.optimizer_name == "8bit" else bnb.optim.Muon32bit
+            muon = muon_cls(
+                muon_params,
+                lr=adam_kwargs["lr"],
+                momentum=0.95,
+                weight_decay=self.weight_decay,
+            )
+
+        if self.optimizer_name == "8bit":
+            import bitsandbytes as bnb
+
+            adam = bnb.optim.AdamW8bit(adamw_params, **adam_kwargs)
+        else:
+            adam = optim.AdamW(adamw_params, **adam_kwargs)
 
         return HybridOptimizer(muon, adam)
 
@@ -224,6 +271,25 @@ class QwenTrainer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, "train")
+
+    def on_train_batch_start(self, batch, batch_idx):
+        self._batch_start = time.perf_counter()
+
+    def on_before_optimizer_step(self, optimizer):
+        # Runs before Lightning's gradient clipping, so this is the pre-clip norm.
+        grads = [p.grad for p in self.parameters() if p.grad is not None]
+        if grads:
+            norm = torch.linalg.vector_norm(torch.stack([torch.linalg.vector_norm(g) for g in grads]))
+            self.log("grad_norm", norm, on_step=True, on_epoch=False)
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        muon_group, adam_group = self.trainer.optimizers[0].param_groups[0], self.trainer.optimizers[0].param_groups[-1]
+        self.log("lr_muon", muon_group["lr"], on_step=True, on_epoch=False)
+        self.log("lr_adamw", adam_group["lr"], on_step=True, on_epoch=False)
+        elapsed = time.perf_counter() - self._batch_start
+        self.log("tokens_per_sec", batch[0].numel() / max(elapsed, 1e-9), on_step=True, on_epoch=False)
+        if torch.cuda.is_available() and self.device.type == "cuda":
+            self.log("peak_mem_mb", torch.cuda.max_memory_allocated() / 2**20, on_step=True, on_epoch=False)
 
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, "val")

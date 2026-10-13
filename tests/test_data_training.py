@@ -290,3 +290,14 @@ def test_checkpoint_filename_renders_step_and_metric():
     template = "qwen3-step{step:06d}-val_loss{val_loss:.4f}"
 
     assert template.format(step=1, val_loss=0.5) == "qwen3-step000001-val_loss0.5000"
+
+
+def test_hybrid_optimizer_keeps_shared_param_groups_after_load_state_dict():
+    """LR schedulers edit HybridOptimizer.param_groups; they must still reach the inner optimizers."""
+    a, b = torch.nn.Parameter(torch.randn(4, 4)), torch.nn.Parameter(torch.randn(4))
+    hybrid = HybridOptimizer(Muon([a], lr=0.1), torch.optim.AdamW([b], lr=0.1))
+    hybrid.load_state_dict(hybrid.state_dict())
+
+    for group in hybrid.param_groups:
+        group["lr"] = 0.5
+    assert all(g["lr"] == 0.5 for o in hybrid.optimizers for g in o.param_groups)

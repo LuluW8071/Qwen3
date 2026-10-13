@@ -32,3 +32,6 @@ class HybridOptimizer(optim.Optimizer):
     def load_state_dict(self, state_dict):
         for i, o in enumerate(self.optimizers):
             o.load_state_dict(state_dict[f"opt_{i}"])
+        # Optimizer.load_state_dict rebuilds param_groups as new dicts; re-share
+        # them so LR schedulers keep driving the inner optimizers after a resume.
+        self.param_groups = [g for o in self.optimizers for g in o.param_groups]
