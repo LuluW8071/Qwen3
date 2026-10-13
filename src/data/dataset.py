@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - optional progress display
 
 from src.configs.logging import logger
 from src.configs.model_config import ModelConfig
+from src.data.tokenizer import TextTokenizer
 
 
 class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
@@ -61,7 +62,7 @@ def load_and_cache_data(
     requested_vocab_size = config.vocab_size or "auto"
     cache_file = cache_path / (
         f"tokenized_data_{config.num_documents}_{config.max_tokens}_"
-        f"vocab{requested_vocab_size}.pkl"
+        f"vocab{requested_vocab_size}_tokenizers.pkl"
     )
 
     if cache_file.exists():
@@ -70,7 +71,7 @@ def load_and_cache_data(
             cached_data = pickle.load(file)
 
         texts = cached_data["texts"]
-        tokenizer = cached_data["tokenizer"]
+        tokenizer = TextTokenizer.from_json(cached_data["tokenizer_json"])
         tokens = cached_data["tokens"]
         _resolve_vocab_size(config, tokenizer)
         logger.info("Loaded {} documents and {:,} tokens", len(texts), len(tokens))
@@ -78,14 +79,11 @@ def load_and_cache_data(
 
     try:
         from datasets import load_dataset
-        from transformers import AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "Data preparation requires `datasets` and `transformers`."
-        ) from exc
+        raise ImportError("Data preparation requires `datasets`.") from exc
 
     logger.info("Processing new data; cache will be written to {}", cache_file)
-    base_tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
+    base_tokenizer = TextTokenizer.from_pretrained()
 
     dataset = load_dataset(
         "HuggingFaceTB/smollm-corpus",
@@ -100,21 +98,15 @@ def load_and_cache_data(
         texts.append(item["text"][:3000])
 
     if config.vocab_size is not None and config.vocab_size != base_tokenizer.vocab_size:
-        if not base_tokenizer.is_fast:
-            raise ValueError("Tokenizer must be fast to train a new vocabulary")
-        tokenizer = base_tokenizer.train_new_from_iterator(
-            texts,
-            vocab_size=config.vocab_size,
-            length=len(texts),
-        )
+        tokenizer = base_tokenizer.train_new(texts, config.vocab_size)
     else:
         tokenizer = base_tokenizer
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
 
     all_tokens: list[int] = []
-    for text in tqdm(texts, desc="Tokenizing"):
-        all_tokens.extend(tokenizer.encode(text, add_special_tokens=False))
+    batch_size = 256
+    for start in tqdm(range(0, len(texts), batch_size), desc="Tokenizing"):
+        for ids in tokenizer.encode_batch(texts[start:start + batch_size]):
+            all_tokens.extend(ids)
 
     tokens = all_tokens[:config.max_tokens]
     if len(tokens) <= config.max_seq_len:
@@ -127,6 +119,8 @@ def load_and_cache_data(
 
     # Cached processed data
     with cache_file.open("wb") as file:
-        pickle.dump({"texts": texts, "tokenizer": tokenizer, "tokens": tokens}, file)
+        pickle.dump(
+            {"texts": texts, "tokenizer_json": tokenizer.to_json(), "tokens": tokens}, file
+        )
     logger.info("Cached {} tokens to {}", len(tokens), cache_file)
     return texts, tokenizer, tokens
