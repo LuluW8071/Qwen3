@@ -13,6 +13,7 @@ dependencies = [
     "tokenizers>=0.23.3",
     "huggingface-hub>=2.2.0",
     "comet-ml>=3.53.0",
+    "bitsandbytes",
 ]
 
 [dependency-groups]
@@ -27,3 +28,9 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
+# feature/muon fork (Muon8bit), pinned to a commit; builds from source (needs nvcc + cmake)
+bitsandbytes = { git = "https://github.com/theblackcat102/bitsandbytes", rev = "c80d430a002edd3ef403a128ba3927e6c02a6417" }
+
+# The fork builds CPU-only by default; build the CUDA backend (89 = RTX 40xx, change for other GPUs).
+[tool.uv.extra-build-variables]
+bitsandbytes = { SKBUILD_CMAKE_ARGS = "-DCOMPUTE_BACKEND=cuda;-DCOMPUTE_CAPABILITY=89" }
