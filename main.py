@@ -12,7 +12,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from src.configs.model_config import ModelConfig
 from src.data.dataloader import QwenDataModule
 from src.neuralnet.qwen import Qwen3LLM
-from src.trainer import OPTIMIZER_CHOICES, QwenTrainer
+from src.trainer import QwenTrainer
 
 # Model and training hyperparameters live in the yaml config; the CLI only
 # carries what changes per launch. `device` is the one exception, because it is
@@ -23,6 +23,7 @@ PRECISION_TO_LIGHTNING = {
     "32-true": "32-true",
     "bf16-mixed": "bf16-mixed",
     "fp16-mixed": "16-mixed",
+    "8bit": "bf16-mixed",  # only optimizer state is 8-bit; compute stays bf16
 }
 
 
@@ -42,11 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-d", "--device", default=None, type=str,
                         help="training device: cpu or cuda; overrides the yaml value")
     parser.add_argument("--precision", default=None,
-                        choices=["32-true", "bf16-mixed", "fp16-mixed"],
-                        help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used")
-    parser.add_argument("--optimizer", default="adamw", choices=OPTIMIZER_CHOICES,
-                        help="adamw: Muon + AdamW, 32-bit (default); muon32: bnb Muon32bit + AdamW; "
-                             "8bit: 8-bit Muon momentum AND 8-bit AdamW (feature/muon fork)")
+                        choices=["32-true", "bf16-mixed", "fp16-mixed", "8bit"],
+                        help="train precision; defaults to bf16-mixed when use_amp is on and CUDA is used. "
+                             "8bit = bf16-mixed compute with 8-bit Muon and 8-bit AdamW optimizer state")
     parser.add_argument("--compile", action="store_true",
                         help="compile the model with torch.compile")
     parser.add_argument("--checkpoint_dir", "--checkpoint-dir", default="checkpoints", type=Path,
@@ -110,6 +109,8 @@ def resolve_precision(config: ModelConfig, args: argparse.Namespace) -> str:
     if precision is None:
         precision = "bf16-mixed" if use_cuda and config.use_amp else "32-true"
 
+    if precision == "8bit" and not use_cuda:
+        raise ValueError("--precision 8bit requires --device cuda")
     if precision == "fp16-mixed" and not use_cuda:
         raise ValueError("--precision fp16-mixed requires --device cuda")
     if precision == "bf16-mixed" and not use_cuda:
@@ -139,10 +140,9 @@ def main() -> None:
     config = apply_overrides(load_config(args.config), args)
     resolve_device(config, args)
     trainer_precision = resolve_precision(config, args)
-    if args.optimizer != "adamw" and config.device != "cuda":
-        raise ValueError("bitsandbytes optimizers require --device cuda")
-    if args.optimizer != "adamw" and args.gpus > 1 and args.dist_backend.startswith("deepspeed"):
-        raise ValueError("bitsandbytes optimizers do not support DeepSpeed sharding; "
+    optimizer = "8bit" if args.precision == "8bit" else "adamw"
+    if optimizer == "8bit" and args.gpus > 1 and args.dist_backend.startswith("deepspeed"):
+        raise ValueError("--precision 8bit does not support DeepSpeed sharding; "
                          "use --dist_backend ddp")
 
     data = QwenDataModule(config, cache_dir=args.cache_dir, num_workers=args.num_workers)
@@ -166,7 +166,7 @@ def main() -> None:
         vocab_size=config.vocab_size,
         tokenizer=data.tokenizer,
         inference_every=args.inference_every,
-        optimizer=args.optimizer,
+        optimizer=optimizer,
     )
 
     checkpoint_callback = ModelCheckpoint(
