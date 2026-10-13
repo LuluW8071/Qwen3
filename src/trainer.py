@@ -54,10 +54,11 @@ class GenerationConfig:
     """Sampling knobs for the validation-time inference engine."""
 
     prompts: tuple[str, ...] = DEFAULT_INFERENCE_PROMPTS
-    max_new_tokens: int = 256
+    max_new_tokens: int = 512
     temperature: float = 0.7
     top_k: int = 40
     top_p: float = 0.9
+    frequency_penalty: float = 0.5
     greedy: bool = False
 
 
@@ -70,6 +71,7 @@ def generate(
     temperature: float = 0.8,
     top_k: int = 50,
     top_p: float = 0.9,
+    frequency_penalty: float = 0.0,
     greedy: bool = False,
     device: torch.device | None = None,
     max_seq_len: int | None = None,
@@ -79,6 +81,8 @@ def generate(
     Returns the full [1, T] token ids plus how many leading tokens are prompt,
     so callers can score only the sampled part. Prompts longer than `max_seq_len`
     are left-truncated to leave room for at least one new token.
+    `frequency_penalty` subtracts penalty * (times a token was already generated)
+    from its logit, so repeated words get less likely; prompt tokens are not counted.
     """
     if device is None:
         device = next(model.parameters()).device
@@ -97,6 +101,9 @@ def generate(
 
     for _ in range(budget):
         logits = model(generated)[0, -1, :].float()
+        if frequency_penalty:
+            counts = torch.bincount(generated[0, prompt_len:], minlength=logits.size(-1))
+            logits = logits - frequency_penalty * counts.to(logits.dtype)
         logits = logits / max(temperature, 1e-5)
 
         if top_k and top_k > 0:
@@ -310,6 +317,7 @@ class QwenTrainer(pl.LightningModule):
                     temperature=cfg.temperature,
                     top_k=cfg.top_k,
                     top_p=cfg.top_p,
+                    frequency_penalty=cfg.frequency_penalty,
                     greedy=cfg.greedy,
                     device=self.device,
                     max_seq_len=self.config.max_seq_len,

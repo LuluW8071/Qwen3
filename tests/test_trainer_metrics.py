@@ -27,6 +27,17 @@ def make_tokenizer(config: ModelConfig) -> FakeTokenizer:
     return FakeTokenizer(vocab_size=config.vocab_size)
 
 
+class ConstantModel(torch.nn.Module):
+    """Model stub that returns the same logits at every position."""
+
+    def __init__(self, logits: torch.Tensor):
+        super().__init__()
+        self.logits = torch.nn.Parameter(logits.clone())
+
+    def forward(self, x):
+        return self.logits.expand(*x.shape, -1)
+
+
 class AlwaysEosModel(torch.nn.Module):
     """Model stub whose argmax is always `eos_token_id`."""
 
@@ -266,3 +277,15 @@ def test_run_inference_restores_training_mode():
     assert len(results) == 2
     for result in results:
         assert {"prompt", "text", "loss", "perplexity", "accuracy"} <= set(result)
+
+def test_frequency_penalty_discourages_repeating_a_token():
+    model = ConstantModel(torch.tensor([5.0, 4.0, 0.0]))
+    tokenizer = FakeTokenizer()
+
+    plain, _ = generate(model, tokenizer, "a", max_new_tokens=6, greedy=True, max_seq_len=64)
+    penalized, _ = generate(
+        model, tokenizer, "a", max_new_tokens=6, greedy=True, frequency_penalty=2.0, max_seq_len=64
+    )
+
+    assert plain[0, 1:].unique().numel() == 1
+    assert penalized[0, 1:].unique().numel() > 1
