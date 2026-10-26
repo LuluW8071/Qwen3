@@ -1,4 +1,4 @@
-# Qwen3 From Scratch
+# Qwen3 PreTraining
 
 A small Qwen3-style decoder-only language model trained from scratch with PyTorch Lightning.
 
@@ -154,13 +154,6 @@ flowchart LR
 
 If a GPU runs out of memory, lower `batch_size` or `max_seq_len` and raise
 `gradient_accumulation_steps` to keep the effective batch size.
-
-## Data Cache
-
-Tokenization is cached under `data_cache/` as a pickle (texts, tokenizer JSON) plus a
-memory-mapped `.tokens.npy` that ranks and DataLoader workers share without copying. Pickle files
-can execute code on load; only use caches you created. Convert an older pickle-only cache with
-`scripts/convert_cache.py`.
 
 ## Tests and Linting
 
