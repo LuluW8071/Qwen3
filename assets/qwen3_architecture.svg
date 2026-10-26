@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 90 1500 1230" width="1500" height="1230" font-family="Inter, Helvetica, Arial, DejaVu Sans, sans-serif">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F8FAFC"/></linearGradient>
+<filter id="sh" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.18"/></filter>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+</defs>
+<rect width="1500" height="1320" fill="url(#bg)"/>
+<text x="750" y="150" text-anchor="middle" font-size="36" fill="#0F172A" font-weight="700">Qwen3 Architecture</text>
+<text x="750" y="182" text-anchor="middle" font-size="16" fill="#64748B" font-weight="500">Decoder-only Transformer  ·  Pre-RMSNorm  ·  GQA  ·  QK-Norm  ·  RoPE  ·  SwiGLU</text>
+<rect x="600" y="565" width="330" height="510" rx="18" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2.2"/>
+<text x="618" y="590" text-anchor="start" font-size="14" fill="#5B21B6" font-weight="700">Transformer Block  (× N)</text>
+<rect x="40" y="370" width="460" height="770" rx="18" fill="#FFF1F2" stroke="#E11D48" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="270" y="400" text-anchor="middle" font-size="18" fill="#9F1239" font-weight="700">Qwen3 Attention</text>
+<text x="270" y="420" text-anchor="middle" font-size="12" fill="#BE123C" font-weight="500" font-style="italic">GQA + QK-Norm + RoPE</text>
+<rect x="1000" y="370" width="460" height="610" rx="18" fill="#F0FDF4" stroke="#16A34A" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="1230" y="400" text-anchor="middle" font-size="18" fill="#166534" font-weight="700">SwiGLU FeedForward</text>
+<text x="1230" y="420" text-anchor="middle" font-size="12" fill="#15803D" font-weight="500" font-style="italic">Down( SiLU(Gate(x)) ⊙ Up(x) )</text>
+<line x1="600" y1="930" x2="500" y2="370" stroke="#94A3B8" stroke-width="1.4" stroke-dasharray="3 5"/>
+<line x1="600" y1="966" x2="500" y2="1140" stroke="#94A3B8" stroke-width="1.4" stroke-dasharray="3 5"/>
+<line x1="930" y1="680" x2="1000" y2="370" stroke="#94A3B8" stroke-width="1.4" stroke-dasharray="3 5"/>
+<line x1="930" y1="716" x2="1000" y2="980" stroke="#94A3B8" stroke-width="1.4" stroke-dasharray="3 5"/>
+<rect x="640.0" y="1230.0" width="220" height="36" rx="9" fill="#FAE8FF" stroke="#C026D3" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="1253" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Input Token IDs</text>
+<rect x="640.0" y="1160.0" width="220" height="36" rx="9" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="1183" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Token Embedding</text>
+<rect x="640.0" y="1090.0" width="220" height="36" rx="9" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.8" stroke-dasharray="5 3" filter="url(#sh)"/>
+<text x="750" y="1113" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Position Dropout</text>
+<rect x="640.0" y="997.0" width="220" height="36" rx="9" fill="#FEF3C7" stroke="#D97706" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="1020" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">RMSNorm</text>
+<rect x="640.0" y="930.0" width="220" height="36" rx="9" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="953" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Qwen3 Attention</text>
+<rect x="640.0" y="864.0" width="220" height="36" rx="9" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.8" stroke-dasharray="5 3" filter="url(#sh)"/>
+<text x="750" y="887" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Dropout</text>
+<circle cx="750" cy="830" r="15" fill="#FFFFFF" stroke="#0F172A" stroke-width="2" filter="url(#sh)"/>
+<text x="750" y="837" text-anchor="middle" font-size="22" font-weight="600" fill="#0F172A">+</text>
+<rect x="640.0" y="750.0" width="220" height="36" rx="9" fill="#FEF3C7" stroke="#D97706" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="773" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">RMSNorm</text>
+<rect x="640.0" y="680.0" width="220" height="36" rx="9" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="703" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">SwiGLU FeedForward</text>
+<circle cx="750" cy="630" r="15" fill="#FFFFFF" stroke="#0F172A" stroke-width="2" filter="url(#sh)"/>
+<text x="750" y="637" text-anchor="middle" font-size="22" font-weight="600" fill="#0F172A">+</text>
+<rect x="640.0" y="480.0" width="220" height="36" rx="9" fill="#FEF3C7" stroke="#D97706" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="503" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Final RMSNorm</text>
+<rect x="640.0" y="410.0" width="220" height="36" rx="9" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.8" stroke-dasharray="5 3" filter="url(#sh)"/>
+<text x="750" y="433" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Output Dropout</text>
+<rect x="640.0" y="340.0" width="220" height="36" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="363" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">LM Head</text>
+<rect x="640.0" y="270.0" width="220" height="36" rx="9" fill="#FAE8FF" stroke="#C026D3" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="750" y="293" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Logits</text>
+<text x="750" y="240" text-anchor="middle" font-size="13" fill="#64748B" font-weight="500" font-style="italic">next-token probabilities</text>
+<circle cx="750" cy="1055" r="4" fill="#0F172A"/>
+<circle cx="750" cy="802" r="4" fill="#0F172A"/>
+<text x="945" y="945" text-anchor="start" font-size="12" fill="#7C3AED" font-weight="500" font-style="italic">residual</text>
+<rect x="180.0" y="440.0" width="180" height="30" rx="9" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="460" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Attention Output</text>
+<rect x="210.0" y="505.0" width="120" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="525" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">W_o</text>
+<rect x="210.0" y="570.0" width="120" height="30" rx="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="590" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Reshape</text>
+<rect x="120.0" y="635.0" width="300" height="50" rx="9" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="665" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Scaled Dot-Product Attention</text>
+<rect x="255.0" y="725.0" width="180" height="30" rx="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="345" y="745" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Repeat KV Heads</text>
+<rect x="70.0" y="795.0" width="100" height="30" rx="9" fill="#CCFBF1" stroke="#0D9488" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="120" y="815" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">RoPE Q</text>
+<rect x="220.0" y="795.0" width="100" height="30" rx="9" fill="#CCFBF1" stroke="#0D9488" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="815" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">RoPE K</text>
+<rect x="70.0" y="855.0" width="100" height="30" rx="9" fill="#FEF3C7" stroke="#D97706" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="120" y="875" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Q_norm</text>
+<rect x="220.0" y="855.0" width="100" height="30" rx="9" fill="#FEF3C7" stroke="#D97706" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="875" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">K_norm</text>
+<rect x="65.0" y="915.0" width="110" height="30" rx="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="120" y="935" text-anchor="middle" font-size="13" fill="#1E293B" font-weight="500">Reshape Q</text>
+<rect x="215.0" y="915.0" width="110" height="30" rx="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="935" text-anchor="middle" font-size="13" fill="#1E293B" font-weight="500">Reshape K</text>
+<rect x="365.0" y="915.0" width="110" height="30" rx="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="420" y="935" text-anchor="middle" font-size="13" fill="#1E293B" font-weight="500">Reshape V</text>
+<rect x="70.0" y="975.0" width="100" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="120" y="995" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Q_proj</text>
+<rect x="220.0" y="975.0" width="100" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="995" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">K_proj</text>
+<rect x="370.0" y="975.0" width="100" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="420" y="995" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">V_proj</text>
+<rect x="170.0" y="1080.0" width="200" height="30" rx="9" fill="#FAE8FF" stroke="#C026D3" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="270" y="1100" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Normalized X</text>
+<rect x="1140.0" y="440.0" width="180" height="30" rx="9" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1230" y="460" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">FFN Output</text>
+<rect x="1165.0" y="505.0" width="130" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1230" y="525" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Down_proj</text>
+<rect x="1165.0" y="570.0" width="130" height="30" rx="9" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.8" stroke-dasharray="5 3" filter="url(#sh)"/>
+<text x="1230" y="590" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Dropout</text>
+<circle cx="1230" cy="650" r="16" fill="#FFFFFF" stroke="#0F172A" stroke-width="2" filter="url(#sh)"/>
+<text x="1230" y="657" text-anchor="middle" font-size="22" font-weight="600" fill="#0F172A">×</text>
+<rect x="1060.0" y="705.0" width="120" height="30" rx="9" fill="#FFEDD5" stroke="#EA580C" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1120" y="725" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">SiLU</text>
+<rect x="1060.0" y="775.0" width="120" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1120" y="795" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Gate_proj</text>
+<rect x="1280.0" y="775.0" width="120" height="30" rx="9" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1340" y="795" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="700">Up_proj</text>
+<rect x="1130.0" y="900.0" width="200" height="30" rx="9" fill="#FAE8FF" stroke="#C026D3" stroke-width="1.8"  filter="url(#sh)"/>
+<text x="1230" y="920" text-anchor="middle" font-size="14" fill="#1E293B" font-weight="500">Normalized X</text>
+<rect x="1000" y="1000" width="460" height="250" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<text x="1020" y="1030" text-anchor="start" font-size="16" fill="#0F172A" font-weight="700">Legend</text>
+<rect x="1020" y="1060" width="30" height="18" rx="5" fill="#FAE8FF" stroke="#C026D3" stroke-width="1.6" />
+<text x="1060" y="1074" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Input / output</text>
+<rect x="1020" y="1094" width="30" height="18" rx="5" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.6" />
+<text x="1060" y="1108" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Embedding</text>
+<rect x="1020" y="1128" width="30" height="18" rx="5" fill="#FEF3C7" stroke="#D97706" stroke-width="1.6" />
+<text x="1060" y="1142" text-anchor="start" font-size="13" fill="#334155" font-weight="500">RMSNorm</text>
+<rect x="1020" y="1162" width="30" height="18" rx="5" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.6" />
+<text x="1060" y="1176" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Linear projection</text>
+<rect x="1020" y="1196" width="30" height="18" rx="5" fill="#F1F5F9" stroke="#64748B" stroke-width="1.6" />
+<text x="1060" y="1210" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Reshape / repeat</text>
+<rect x="1240" y="1060" width="30" height="18" rx="5" fill="#CCFBF1" stroke="#0D9488" stroke-width="1.6" />
+<text x="1280" y="1074" text-anchor="start" font-size="13" fill="#334155" font-weight="500">RoPE</text>
+<rect x="1240" y="1094" width="30" height="18" rx="5" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.6" />
+<text x="1280" y="1108" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Attention core</text>
+<rect x="1240" y="1128" width="30" height="18" rx="5" fill="#FFEDD5" stroke="#EA580C" stroke-width="1.6" />
+<text x="1280" y="1142" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Activation</text>
+<rect x="1240" y="1162" width="30" height="18" rx="5" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.6" />
+<text x="1280" y="1176" text-anchor="start" font-size="13" fill="#334155" font-weight="500">FFN output</text>
+<rect x="1240" y="1196" width="30" height="18" rx="5" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="5 3"/>
+<text x="1280" y="1210" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Dropout</text>
+<line x1="1020" y1="1235" x2="1050" y2="1235" stroke="#7C3AED" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="1060" y="1240" text-anchor="start" font-size="13" fill="#334155" font-weight="500">Residual connection</text>
+<polyline points="750,1230 750,1196" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,1160 750,1126" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,1090 750,1033" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,997 750,966" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,930 750,900" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,864 750,844" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,816 750,786" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,750 750,716" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,680 750,644" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,616 750,516" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,480 750,446" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,410 750,376" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,340 750,306" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,270 750,252" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,1055 895,1055 895,830 766,830" fill="none" stroke="#7C3AED" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="750,802 895,802 895,630 766,630" fill="none" stroke="#7C3AED" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,1080 270,1045 120,1045 120,1005" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,1080 270,1005" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,1080 270,1045 420,1045 420,1005" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="120,975 120,945" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,975 270,945" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="420,975 420,945" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="120,915 120,885" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="120,855 120,825" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,915 270,885" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,855 270,825" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="420,915 420,755" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,795 270,755" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="120,795 120,685" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="345,725 345,685" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,635 270,600" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,570 270,535" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="270,505 270,470" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1230,900 1230,860 1120,860 1120,805" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1230,900 1230,860 1340,860 1340,805" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1120,775 1120,735" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1120,705 1120,650 1213,650" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1340,775 1340,650 1247,650" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1230,634 1230,600" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1230,570 1230,535" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+<polyline points="1230,505 1230,470" fill="none" stroke="#475569" stroke-width="1.8"  marker-end="url(#ah)" stroke-linejoin="round"/>
+</svg>
