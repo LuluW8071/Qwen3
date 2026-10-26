@@ -1,12 +1,13 @@
 import torch
 
+
 @torch.compile()
 def zeropower_via_newtonschulz(G: torch.Tensor, steps: int = 5) -> torch.Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G.
     ---
 
-    Basically squash huge updates like normalization so huge wright updates become normalized enough to support stable training.
+    Normalizes the update so large gradient magnitudes cannot destabilize training.
 
     #### Works on the principle of Frobenius Normalization.
     It puts matrix at controlled overall scale before Newton-Schulz.
@@ -15,7 +16,7 @@ def zeropower_via_newtonschulz(G: torch.Tensor, steps: int = 5) -> torch.Tensor:
     X = X / (X.norm(dim=(-2, -1), keepdim=True) + 1e-7)
     ```
 
-    means: Take entire matrix, calculate its overall magnitude, then divide every element by that magnitude.
+    i.e. divide every element by the matrix's overall magnitude.
     """
 
     assert G.ndim >= 2
@@ -23,7 +24,7 @@ def zeropower_via_newtonschulz(G: torch.Tensor, steps: int = 5) -> torch.Tensor:
     # Coefficients for Newton-Schulz polynomial.
     # Repeated iterations push singular values toward a similar magnitude.
     a, b, c = (3.4445, -4.7750, 2.0315)
-    X = G.bfloat16()            # Faster/Lower-memory matrix operations
+    X = G.bfloat16()  # Faster/Lower-memory matrix operations
 
     # Newton-Schulz is easier/stabler when rows <= columns.
     # Transpose back after orthogonalization.
@@ -53,6 +54,7 @@ def zeropower_via_newtonschulz(G: torch.Tensor, steps: int = 5) -> torch.Tensor:
 
 class Muon(torch.optim.Optimizer):
     """Muon - MomentUm Orthogonalized by Newton-schulz"""
+
     def __init__(self, params, lr=0.02, momentum=0.95, nesterov=True, ns_steps=5):
         defaults = dict(lr=lr, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
         super().__init__(params, defaults)
@@ -84,10 +86,12 @@ class Muon(torch.optim.Optimizer):
                 # Apply Nesterov momentum if enabled, otherwise use standard momentum
                 g = g.lerp_(buf, group["momentum"]) if group["nesterov"] else buf
 
-                # Apply zero-power normalization via Newton-Schulz iterations (make it close to orthonormal)
+                # Orthogonalize via Newton-Schulz iterations (drives g towards orthonormal)
                 g = zeropower_via_newtonschulz(g, steps=group["ns_steps"])
 
                 # Update parameters with adaptive scaling based on parameter shape
-                p.add_(g.view_as(p), alpha=-group["lr"] * max(1, p.size(-2) / p.size(-1))**0.5)
-                # Updates parameters with an adaptive learning rate that scales based on the parameter tensor's aspect ratio (height/width).
-                # For matrices where height > width, it increases the effective learning rate by √(height/widt
+                p.add_(g.view_as(p), alpha=-group["lr"] * max(1, p.size(-2) / p.size(-1)) ** 0.5)
+                # The lr is scaled by sqrt(height/width) when height > width, so tall
+                # matrices get a proportionally larger effective step.
+
+        return loss

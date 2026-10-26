@@ -1,5 +1,4 @@
 import torch
-
 from torch import nn
 from torch.nn import functional as F
 
@@ -30,13 +29,14 @@ def repeat_kv_heads(
     # (batch, num_key_value_heads, seq_len, head_dim)
     # -> (batch, num_key_value_heads, 1, seq_len, head_dim)
     # -> (batch, num_key_value_heads, n_rep, seq_len, head_dim)
-    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, seq_len, head_dim)
+    hidden_states = hidden_states[:, :, None, :, :].expand(
+        batch, num_key_value_heads, n_rep, seq_len, head_dim
+    )
 
     # Flatten the num_key_value_heads and n_rep dimensions together
     # Final shape: (batch, num_key_value_heads * n_rep, seq_len, head_dim)
     # This repeats each key/value head n_rep times
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, seq_len, head_dim)
-
 
 
 class GroupedQueryAttention(nn.Module):
@@ -51,8 +51,12 @@ class GroupedQueryAttention(nn.Module):
 
         # Separate linear layers for Q, K, V
         self.q_proj = nn.Linear(self.d_model, self.n_heads * self.d_k, bias=config.attention_bias)
-        self.k_proj = nn.Linear(self.d_model, self.n_kv_heads * self.d_k, bias=config.attention_bias)
-        self.v_proj = nn.Linear(self.d_model, self.n_kv_heads * self.d_k, bias=config.attention_bias)
+        self.k_proj = nn.Linear(
+            self.d_model, self.n_kv_heads * self.d_k, bias=config.attention_bias
+        )
+        self.v_proj = nn.Linear(
+            self.d_model, self.n_kv_heads * self.d_k, bias=config.attention_bias
+        )
         self.w_o = nn.Linear(self.d_model, self.d_model, bias=False)
 
         # QK-Normalization layers
@@ -127,7 +131,9 @@ class GroupedQueryAttention(nn.Module):
         logger.debug("attn_output.shape: {}", attn_output.shape)
 
         # 7. Reshape and final projection
-        attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+        attn_output = (
+            attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+        )
         logger.debug("attn_output.shape: {}", attn_output.shape)
 
         return self.w_o(attn_output)

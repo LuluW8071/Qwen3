@@ -1,7 +1,7 @@
 import math
+
 import torch
 from torch import nn
-
 
 from src.configs.model_config import ModelConfig
 from src.neuralnet.transformer import TransformerBlock
@@ -15,15 +15,15 @@ class Qwen3LLM(nn.Module):
         self.token_embedding = nn.Embedding(config.vocab_size, config.d_model)
         self.position_dropout = nn.Dropout(config.dropout)
 
-        self.transformer_blocks = nn.ModuleList([
-            TransformerBlock(config) for _ in range(config.n_layers)
-        ])
+        self.transformer_blocks = nn.ModuleList(
+            [TransformerBlock(config) for _ in range(config.n_layers)]
+        )
 
         self.norm = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
         self.output_dropout = nn.Dropout(config.dropout)
 
-        # Tie weights
-        # This ties the output layer (`lm_head`) weights to the input token embedding weights so the model shares parameters between input and output, reducing memory and improving generalization.
+        # Tie the output head to the input embedding: one shared matrix saves memory
+        # and usually generalizes better.
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
         self.lm_head.weight = self.token_embedding.weight
 

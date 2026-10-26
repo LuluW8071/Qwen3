@@ -11,8 +11,11 @@ def make_tokenizer() -> TextTokenizer:
     tk.decoder = decoders.ByteLevel()
     tk.train_from_iterator(
         TEXTS,
-        trainers.BpeTrainer(vocab_size=300, special_tokens=[EOS_TOKEN],
-                            initial_alphabet=pre_tokenizers.ByteLevel.alphabet()),
+        trainers.BpeTrainer(
+            vocab_size=300,
+            special_tokens=[EOS_TOKEN],
+            initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+        ),
     )
     return TextTokenizer(tk)
 

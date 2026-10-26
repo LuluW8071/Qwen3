@@ -29,16 +29,18 @@ class TextTokenizer:
         return self._tk.to_str()
 
     @classmethod
-    def from_json(cls, data: str) -> "TextTokenizer":
+    def from_json(cls, data: str) -> TextTokenizer:
         return cls(Tokenizer.from_str(data))
 
     @classmethod
-    def from_pretrained(cls, name: str = BASE_TOKENIZER) -> "TextTokenizer":
+    def from_pretrained(cls, name: str = BASE_TOKENIZER) -> TextTokenizer:
         return cls(Tokenizer.from_pretrained(name))
 
-    def train_new(self, texts, vocab_size: int) -> "TextTokenizer":
+    def train_new(self, texts, vocab_size: int) -> TextTokenizer:
         """Train a fresh byte-level BPE with the same pre-tokenizer/specials and `vocab_size`."""
-        specials = [t.content for _, t in sorted(self._tk.get_added_tokens_decoder().items()) if t.special]
+        specials = [
+            t.content for _, t in sorted(self._tk.get_added_tokens_decoder().items()) if t.special
+        ]
         new = Tokenizer(models.BPE())
         new.normalizer = self._tk.normalizer
         new.pre_tokenizer = self._tk.pre_tokenizer

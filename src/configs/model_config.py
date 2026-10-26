@@ -3,10 +3,10 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
-    d_model: int    # Embedding dimension
-    n_heads: int    # Number of attention heads
-    n_layers: int   # Number of transformer blocks
-    d_ff: int       # Feed-forward dimension
+    d_model: int  # Embedding dimension
+    n_heads: int  # Number of attention heads
+    n_layers: int  # Number of transformer blocks
+    d_ff: int  # Feed-forward dimension
 
     n_kv_heads: int
     sliding_window: int
@@ -45,11 +45,12 @@ class ModelConfig:
 
     @property
     def d_k(self) -> int:
-        return self.d_model // self.n_heads # head_dim
+        return self.d_model // self.n_heads  # head_dim
 
     @property
     def n_kv_groups(self) -> int:
         return self.n_heads // self.n_kv_heads
+
 
 # import yaml
 

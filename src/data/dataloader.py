@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
+import lightning.pytorch as pl
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset
-import lightning.pytorch as pl
 
 from src.configs.model_config import ModelConfig
 from src.data.dataset import TextTokenDataset, load_and_cache_data
@@ -28,8 +26,8 @@ class QwenDataModule(pl.LightningDataModule):
         self.cache_dir = cache_dir
         self.num_workers = num_workers
         self.validation_fraction = validation_fraction
-        self.train_dataset: Optional[TextTokenDataset] = None
-        self.val_dataset: Optional[TextTokenDataset] = None
+        self.train_dataset: TextTokenDataset | None = None
+        self.val_dataset: TextTokenDataset | None = None
         self.tokenizer = None
 
     def setup(self, stage: str | None = None) -> None:

@@ -4,10 +4,9 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 
 class RotaryPositionalEmbeddings(nn.Module):
@@ -50,17 +49,14 @@ class RotaryPositionalEmbeddings(nn.Module):
 
     def _rope_init(self):
         theta = 1.0 / (
-            self.base
-            ** (torch.arange(0, self.dim, 2)[: (self.dim // 2)].float() / self.dim)
+            self.base ** (torch.arange(0, self.dim, 2)[: (self.dim // 2)].float() / self.dim)
         )
         self.register_buffer("theta", theta, persistent=False)
         self.build_rope_cache(self.max_seq_len)
 
     def build_rope_cache(self, max_seq_len: int = 4096) -> None:
         # Create position indexes `[0, 1, ..., max_seq_len - 1]`
-        seq_idx = torch.arange(
-            max_seq_len, dtype=self.theta.dtype, device=self.theta.device
-        )
+        seq_idx = torch.arange(max_seq_len, dtype=self.theta.dtype, device=self.theta.device)
 
         # Outer product of theta and position index; output tensor has
         # a shape of [max_seq_len, dim // 2]
@@ -71,8 +67,7 @@ class RotaryPositionalEmbeddings(nn.Module):
         cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1)
         self.register_buffer("cache", cache, persistent=False)
 
-    def forward(self, x: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-
+    def forward(self, x: Tensor, input_pos: Tensor | None = None) -> Tensor:
         """
         Args:
             x (Tensor): input tensor with shape
@@ -97,9 +92,7 @@ class RotaryPositionalEmbeddings(nn.Module):
 
         # extract the values based on whether input_pos is set or not. When
         # input_pos is provided, we're in inference mode
-        rope_cache = (
-            self.cache[:seq_len] if input_pos is None else self.cache[input_pos]
-        )
+        rope_cache = self.cache[:seq_len] if input_pos is None else self.cache[input_pos]
 
         # reshape input; the last dimension is used for computing the output.
         # Cast to float to match the reference implementation
@@ -113,10 +106,8 @@ class RotaryPositionalEmbeddings(nn.Module):
         # tensor has shape [b, s, n_h, n_d // 2, 2]
         x_out = torch.stack(
             [
-                xshaped[..., 0] * rope_cache[..., 0]
-                - xshaped[..., 1] * rope_cache[..., 1],
-                xshaped[..., 1] * rope_cache[..., 0]
-                + xshaped[..., 0] * rope_cache[..., 1],
+                xshaped[..., 0] * rope_cache[..., 0] - xshaped[..., 1] * rope_cache[..., 1],
+                xshaped[..., 1] * rope_cache[..., 0] + xshaped[..., 0] * rope_cache[..., 1],
             ],
             -1,
         )

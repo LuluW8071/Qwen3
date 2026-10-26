@@ -1,7 +1,8 @@
 """Convert an old list-of-tokens cache pickle to the memory-mapped format (run once, one process).
 
-Usage: python scripts/convert_cache.py data_cache/tokenized_data_250000_200000000_vocab24000_tokenizers.pkl
+Usage: python scripts/convert_cache.py data_cache/<old_cache>.pkl
 """
+
 import pickle
 import sys
 from pathlib import Path

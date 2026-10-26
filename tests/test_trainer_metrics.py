@@ -53,9 +53,7 @@ class AlwaysEosModel(torch.nn.Module):
 
 
 def fit_module(module: QwenTrainer, max_steps: int = 4, val_check_interval: int = 2):
-    data = TensorDataset(
-        torch.randint(1, 16, (8, 4)), torch.randint(1, 16, (8, 4))
-    )
+    data = TensorDataset(torch.randint(1, 16, (8, 4)), torch.randint(1, 16, (8, 4)))
     loader = DataLoader(data, batch_size=2)
     trainer = pl.Trainer(
         max_steps=max_steps,
@@ -80,10 +78,14 @@ def test_perplexity_matches_exp_of_mean_cross_entropy():
     targets = torch.randint(0, config.vocab_size, (2, 4))
 
     expected = torch.exp(
-        torch.nn.functional.cross_entropy(logits.reshape(-1, config.vocab_size), targets.reshape(-1))
+        torch.nn.functional.cross_entropy(
+            logits.reshape(-1, config.vocab_size), targets.reshape(-1)
+        )
     )
 
-    assert perplexity(logits, targets, ignore_index=IGNORE_INDEX) == pytest.approx(expected.item(), rel=1e-5)
+    assert perplexity(logits, targets, ignore_index=IGNORE_INDEX) == pytest.approx(
+        expected.item(), rel=1e-5
+    )
 
 
 def test_perplexity_ignores_masked_targets():
@@ -201,7 +203,7 @@ def test_score_generation_reports_tail_only_metrics():
 
     with torch.no_grad():
         logits = model(input_ids).float()
-        step_logits = logits[:, prompt_len - 1:-1].reshape(-1, config.vocab_size)
+        step_logits = logits[:, prompt_len - 1 : -1].reshape(-1, config.vocab_size)
         targets = input_ids[:, prompt_len:].reshape(-1)
         expected_loss = torch.nn.functional.cross_entropy(step_logits, targets)
         expected_acc = (step_logits.argmax(dim=-1) == targets).float().mean()
@@ -278,6 +280,7 @@ def test_run_inference_restores_training_mode():
     for result in results:
         assert {"prompt", "text", "loss", "perplexity", "accuracy"} <= set(result)
 
+
 def test_frequency_penalty_discourages_repeating_a_token():
     model = ConstantModel(torch.tensor([5.0, 4.0, 0.0]))
     tokenizer = FakeTokenizer()
@@ -289,3 +292,18 @@ def test_frequency_penalty_discourages_repeating_a_token():
 
     assert plain[0, 1:].unique().numel() == 1
     assert penalized[0, 1:].unique().numel() > 1
+
+
+def test_generate_streams_every_sampled_token_to_the_callback():
+    seen = []
+    ids, prompt_len = generate(
+        ConstantModel(torch.tensor([5.0, 0.0, 0.0])),
+        FakeTokenizer(),
+        "a",
+        max_new_tokens=4,
+        greedy=True,
+        max_seq_len=64,
+        on_token=seen.append,
+    )
+
+    assert seen == ids[0, prompt_len:].tolist() and len(seen) == 4

@@ -51,12 +51,8 @@ def test_repeat_kv_heads_repeats_each_head(gqa_tensors):
         start = kv_head * n_rep
         end = start + n_rep
 
-        expected_keys = keys[:, kv_head : kv_head + 1].expand(
-            -1, n_rep, -1, -1
-        )
-        expected_values = values[:, kv_head : kv_head + 1].expand(
-            -1, n_rep, -1, -1
-        )
+        expected_keys = keys[:, kv_head : kv_head + 1].expand(-1, n_rep, -1, -1)
+        expected_values = values[:, kv_head : kv_head + 1].expand(-1, n_rep, -1, -1)
 
         assert torch.equal(repeated_keys[:, start:end], expected_keys)
         assert torch.equal(repeated_values[:, start:end], expected_values)

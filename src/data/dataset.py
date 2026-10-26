@@ -3,21 +3,23 @@ from __future__ import annotations
 import os
 import pickle
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
 try:
     from tqdm.auto import tqdm
 except ImportError:  # pragma: no cover - optional progress display
+
     def tqdm(iterable, **kwargs):
         return iterable
+
 
 from src.configs.logging import logger
 from src.configs.model_config import ModelConfig
 from src.data.tokenizer import TextTokenizer
-
 
 TOKENIZER_TRAIN_DOCS = 100_000
 
@@ -25,12 +27,14 @@ TOKENIZER_TRAIN_DOCS = 100_000
 class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     """Turn one contiguous token stream into next-token prediction samples."""
 
-    def __init__(self, tokens: List[int], seq_len: int = 512):
+    def __init__(self, tokens: list[int], seq_len: int = 512):
         if seq_len < 1:
             raise ValueError("seq_len must be positive")
         # int32 array: a Python list of 100M+ ints costs ~5 GB per process and per worker
         # keep ndarrays (incl. memmaps) as-is so a mapped cache is never copied into RAM
-        self.tokens = tokens if isinstance(tokens, np.ndarray) else np.asarray(tokens, dtype=np.int32)
+        self.tokens = (
+            tokens if isinstance(tokens, np.ndarray) else np.asarray(tokens, dtype=np.int32)
+        )
         self.seq_len = seq_len
 
     def __len__(self) -> int:
@@ -38,7 +42,7 @@ class TextTokenDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         start = index
-        window = self.tokens[start:start + self.seq_len + 1].astype(np.int64)
+        window = self.tokens[start : start + self.seq_len + 1].astype(np.int64)
         return torch.from_numpy(window[:-1]), torch.from_numpy(window[1:])
 
 
@@ -115,14 +119,13 @@ def load_and_cache_data(
     chunks: list[np.ndarray] = []
     batch_size = 256
     for start in tqdm(range(0, len(texts), batch_size), desc="Tokenizing"):
-        for ids in tokenizer.encode_batch(texts[start:start + batch_size]):
+        for ids in tokenizer.encode_batch(texts[start : start + batch_size]):
             chunks.append(np.asarray(ids, dtype=np.int32))
 
-    tokens = np.concatenate(chunks)[:config.max_tokens]
+    tokens = np.concatenate(chunks)[: config.max_tokens]
     if len(tokens) <= config.max_seq_len:
         raise ValueError(
-            f"Need more than max_seq_len ({config.max_seq_len}) tokens; "
-            f"got {len(tokens)}."
+            f"Need more than max_seq_len ({config.max_seq_len}) tokens; got {len(tokens)}."
         )
 
     _resolve_vocab_size(config, tokenizer)
@@ -130,9 +133,7 @@ def load_and_cache_data(
     # Cached processed data; tokens go to a .npy so every rank/worker can mmap them
     np.save(tokens_file, tokens.astype(np.uint16 if tokenizer.vocab_size < 2**16 else np.int32))
     with cache_file.open("wb") as file:
-        pickle.dump(
-            {"texts": texts, "tokenizer_json": tokenizer.to_json(), "tokens": None}, file
-        )
+        pickle.dump({"texts": texts, "tokenizer_json": tokenizer.to_json(), "tokens": None}, file)
     tokens = np.load(tokens_file, mmap_mode="r")
     logger.info("Cached {} tokens to {}", len(tokens), cache_file)
     return texts, tokenizer, tokens
