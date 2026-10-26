@@ -8,7 +8,7 @@ from src.neuralnet.attention import GroupedQueryAttention
 
 
 def test_grouped_query_attention_example():
-    config_path = Path(__file__).parents[1] / "src/configs/example.yaml"
+    config_path = Path(__file__).parents[1] / "src/configs/model.yaml"
     with config_path.open() as config_file:
         config = ModelConfig(**yaml.safe_load(config_file))
 

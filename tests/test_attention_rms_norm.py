@@ -12,7 +12,7 @@ from src.neuralnet.attention import GroupedQueryAttention
 
 
 def _load_config() -> ModelConfig:
-    config_path = Path(__file__).parents[1] / "src/configs/example.yaml"
+    config_path = Path(__file__).parents[1] / "src/configs/model.yaml"
     with config_path.open() as config_file:
         return ModelConfig(**yaml.safe_load(config_file))
 
@@ -78,9 +78,7 @@ def test_rms_norm_quality_and_latency_drift():
     finally:
         logger.enable("src.neuralnet.attention")
 
-    latency_delta_percent = (
-        (rms_latency_ms - no_rms_latency_ms) / no_rms_latency_ms * 100
-    )
+    latency_delta_percent = (rms_latency_ms - no_rms_latency_ms) / no_rms_latency_ms * 100
     logger.info(
         "rms_norm quality drift | device={} rmse={} mae={} relative_l2={} cosine_similarity={}",
         device,

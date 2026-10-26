@@ -201,14 +201,20 @@ def test_arg_parser_only_exposes_launch_flags():
     yaml_fields = {field.name for field in fields(ModelConfig)}
 
     assert dests & yaml_fields == {"device"}
-    assert {"config", "gpus", "dist_backend", "precision", "checkpoint_dir",
-            "resume_checkpoint", "cache_dir", "num_workers",
-            "inference_every"} <= dests
+    assert {
+        "config",
+        "gpus",
+        "dist_backend",
+        "precision",
+        "checkpoint_dir",
+        "resume_checkpoint",
+        "cache_dir",
+        "num_workers",
+        "inference_every",
+    } <= dests
 
 
-@pytest.mark.parametrize(
-    "config_name", ["example.yaml", "param.yaml"]
-)
+@pytest.mark.parametrize("config_name", ["model.yaml"])
 def test_shipped_configs_define_every_field(config_name):
     path = Path(__file__).parents[1] / "src/configs" / config_name
 
@@ -293,7 +299,7 @@ def test_checkpoint_filename_renders_step_and_metric():
 
 
 def test_hybrid_optimizer_keeps_shared_param_groups_after_load_state_dict():
-    """LR schedulers edit HybridOptimizer.param_groups; they must still reach the inner optimizers."""
+    """LR schedulers edit HybridOptimizer.param_groups; edits must reach the inner optimizers."""
     a, b = torch.nn.Parameter(torch.randn(4, 4)), torch.nn.Parameter(torch.randn(4))
     hybrid = HybridOptimizer(Muon([a], lr=0.1), torch.optim.AdamW([b], lr=0.1))
     hybrid.load_state_dict(hybrid.state_dict())
