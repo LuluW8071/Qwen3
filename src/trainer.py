@@ -2,26 +2,22 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import lightning.pytorch as pl
 from torchmetrics.functional.text import perplexity
 
 from src.configs.logging import logger
 from src.configs.model_config import ModelConfig
-from src.optim.muon import Muon
 from src.optim.hybridoptim import HybridOptimizer
+from src.optim.muon import Muon
 
 IGNORE_INDEX = -100
-
-# adamw:     custom Muon + torch AdamW (original behavior, default)
-# muon32:    bnb Muon32bit + torch AdamW (same-update-rule fp32 baseline for muon8bit)
-# 8bit:      bnb Muon8bit + bnb AdamW8bit, both optimizers 8-bit (needs the feature/muon bitsandbytes fork)
-OPTIMIZER_CHOICES = ("adamw", "muon32", "8bit")
 
 
 def split_param_groups(named_params):
@@ -39,6 +35,7 @@ def split_param_groups(named_params):
         else:
             adamw.append((name, p))
     return muon, adamw
+
 
 DEFAULT_INFERENCE_PROMPTS = (
     "Once upon a time, in a small village surrounded by mountains",
@@ -75,6 +72,7 @@ def generate(
     greedy: bool = False,
     device: torch.device | None = None,
     max_seq_len: int | None = None,
+    on_token: Callable[[int], None] | None = None,
 ) -> tuple[torch.Tensor, int]:
     """Sample a continuation for `prompt`.
 
@@ -83,19 +81,18 @@ def generate(
     are left-truncated to leave room for at least one new token.
     `frequency_penalty` subtracts penalty * (times a token was already generated)
     from its logit, so repeated words get less likely; prompt tokens are not counted.
+    `on_token` is called with each sampled token id (including a final EOS) for streaming.
     """
     if device is None:
         device = next(model.parameters()).device
 
-    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False) or [
-        tokenizer.eos_token_id
-    ]
+    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False) or [tokenizer.eos_token_id]
     generated = torch.tensor([prompt_ids], dtype=torch.long, device=device)
     eos_id = tokenizer.eos_token_id
 
     budget = max_new_tokens
     if max_seq_len is not None:
-        generated = generated[:, -(max_seq_len - 1):]
+        generated = generated[:, -(max_seq_len - 1) :]
         budget = min(budget, max_seq_len - generated.size(1))
     prompt_len = generated.size(1)
 
@@ -126,6 +123,8 @@ def generate(
             next_token = torch.multinomial(F.softmax(logits, dim=-1), 1).squeeze(-1)
 
         generated = torch.cat([generated, next_token.view(1, 1)], dim=1)
+        if on_token is not None:
+            on_token(int(next_token))
         if eos_id is not None and int(next_token) == eos_id:
             break
 
@@ -142,7 +141,7 @@ def score_generation(
     if tail_targets.numel() == 0:
         return {"loss": float("nan"), "perplexity": float("nan"), "accuracy": float("nan")}
 
-    step_logits = logits[:, prompt_len - 1:-1]
+    step_logits = logits[:, prompt_len - 1 : -1]
     loss = F.cross_entropy(step_logits.reshape(-1, logits.size(-1)), tail_targets.reshape(-1))
     accuracy = (step_logits.argmax(dim=-1) == tail_targets).float().mean()
     return {
@@ -156,9 +155,9 @@ class QwenTrainer(pl.LightningModule):
     """Train/Validates the Qwen3 LLM with Muon + AdamW hybrid optimizer."""
 
     def __init__(
-        self, 
-        model: nn.Module, 
-        config: ModelConfig, 
+        self,
+        model: nn.Module,
+        config: ModelConfig,
         muon_lr: float = 1e-2,
         weight_decay: float = 0.1,
         batch_size: int = 8,
@@ -168,12 +167,8 @@ class QwenTrainer(pl.LightningModule):
         tokenizer=None,
         generation_config: GenerationConfig | None = None,
         inference_every: int = 100,
-        optimizer: str = "adamw",
     ):
         super().__init__()
-        if optimizer not in OPTIMIZER_CHOICES:
-            raise ValueError(f"optimizer must be one of {OPTIMIZER_CHOICES}, got {optimizer!r}")
-        self.optimizer_name = optimizer
         self.model = model
         self.config = config
         self.muon_lr = muon_lr
@@ -205,11 +200,16 @@ class QwenTrainer(pl.LightningModule):
         for label, named in (("muon", muon_named), ("adamw", adamw_named)):
             for name, p in named:
                 logger.info("[{}] {} {} numel={:,}", label, name, tuple(p.shape), p.numel())
-        logger.info("Optimizer: {}", self.optimizer_name)
-        logger.info("Muon params: {} tensors, {:,} numel", len(muon_params),
-                    sum(p.numel() for p in muon_params))
-        logger.info("AdamW params: {} tensors, {:,} numel", len(adamw_params),
-                    sum(p.numel() for p in adamw_params))
+        logger.info(
+            "Muon params: {} tensors, {:,} numel",
+            len(muon_params),
+            sum(p.numel() for p in muon_params),
+        )
+        logger.info(
+            "AdamW params: {} tensors, {:,} numel",
+            len(adamw_params),
+            sum(p.numel() for p in adamw_params),
+        )
 
         adam_kwargs = {
             "lr": self.muon_lr * 0.1,
@@ -218,27 +218,8 @@ class QwenTrainer(pl.LightningModule):
             "weight_decay": self.weight_decay,
         }
 
-        if self.optimizer_name == "adamw":
-            muon = Muon(muon_params, lr=self.muon_lr, momentum=0.95)
-        else:
-            import bitsandbytes as bnb
-
-            # The fork's Muon scales its update to match AdamW RMS (adjust_lr="rms_norm"),
-            # so it takes an AdamW-scale lr rather than muon_lr.
-            muon_cls = bnb.optim.Muon8bit if self.optimizer_name == "8bit" else bnb.optim.Muon32bit
-            muon = muon_cls(
-                muon_params,
-                lr=adam_kwargs["lr"],
-                momentum=0.95,
-                weight_decay=self.weight_decay,
-            )
-
-        if self.optimizer_name == "8bit":
-            import bitsandbytes as bnb
-
-            adam = bnb.optim.AdamW8bit(adamw_params, **adam_kwargs)
-        else:
-            adam = optim.AdamW(adamw_params, **adam_kwargs)
+        muon = Muon(muon_params, lr=self.muon_lr, momentum=0.95)
+        adam = optim.AdamW(adamw_params, **adam_kwargs)
 
         return HybridOptimizer(muon, adam)
 
@@ -255,25 +236,44 @@ class QwenTrainer(pl.LightningModule):
 
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
         return {
-            "optimizer": optimizer, 
-            "lr_scheduler": {"scheduler": scheduler, "interval": "step"}
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step"},
         }
 
     def _shared_step(self, batch, stage: str) -> torch.Tensor:
         x, y = batch
         logits = self(x)
-        loss = F.cross_entropy(
-            logits.reshape(-1, self.vocab_size), y.reshape(-1))
+        loss = F.cross_entropy(logits.reshape(-1, self.vocab_size), y.reshape(-1))
         ppl = perplexity(logits.detach().float(), y, ignore_index=IGNORE_INDEX)
         acc = (logits.argmax(dim=-1) == y).float().mean()
 
         is_train = stage == "train"
-        self.log(f"{stage}_loss", loss, prog_bar=is_train, on_step=is_train, on_epoch=True,
-                 sync_dist=True, batch_size=x.size(0))
-        self.log(f"{stage}_perplexity", ppl, prog_bar=is_train, on_step=is_train, on_epoch=True,
-                 sync_dist=True, batch_size=x.size(0))
-        self.log(f"{stage}_accuracy", acc, on_step=False, on_epoch=True,
-                 sync_dist=True, batch_size=x.size(0))
+        self.log(
+            f"{stage}_loss",
+            loss,
+            prog_bar=is_train,
+            on_step=is_train,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=x.size(0),
+        )
+        self.log(
+            f"{stage}_perplexity",
+            ppl,
+            prog_bar=is_train,
+            on_step=is_train,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=x.size(0),
+        )
+        self.log(
+            f"{stage}_accuracy",
+            acc,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=x.size(0),
+        )
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -286,17 +286,29 @@ class QwenTrainer(pl.LightningModule):
         # Runs before Lightning's gradient clipping, so this is the pre-clip norm.
         grads = [p.grad for p in self.parameters() if p.grad is not None]
         if grads:
-            norm = torch.linalg.vector_norm(torch.stack([torch.linalg.vector_norm(g) for g in grads]))
+            norm = torch.linalg.vector_norm(
+                torch.stack([torch.linalg.vector_norm(g) for g in grads])
+            )
             self.log("grad_norm", norm, on_step=True, on_epoch=False)
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
-        muon_group, adam_group = self.trainer.optimizers[0].param_groups[0], self.trainer.optimizers[0].param_groups[-1]
+        muon_group, adam_group = (
+            self.trainer.optimizers[0].param_groups[0],
+            self.trainer.optimizers[0].param_groups[-1],
+        )
         self.log("lr_muon", muon_group["lr"], on_step=True, on_epoch=False)
         self.log("lr_adamw", adam_group["lr"], on_step=True, on_epoch=False)
         elapsed = time.perf_counter() - self._batch_start
-        self.log("tokens_per_sec", batch[0].numel() / max(elapsed, 1e-9), on_step=True, on_epoch=False)
+        self.log(
+            "tokens_per_sec", batch[0].numel() / max(elapsed, 1e-9), on_step=True, on_epoch=False
+        )
         if torch.cuda.is_available() and self.device.type == "cuda":
-            self.log("peak_mem_mb", torch.cuda.max_memory_allocated() / 2**20, on_step=True, on_epoch=False)
+            self.log(
+                "peak_mem_mb",
+                torch.cuda.max_memory_allocated() / 2**20,
+                on_step=True,
+                on_epoch=False,
+            )
 
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, "val")
@@ -376,9 +388,14 @@ class QwenTrainer(pl.LightningModule):
         def mean(key: str) -> float:
             return sum(float(r[key]) for r in results) / count
 
-        self.log("val_generation_perplexity", mean("perplexity"), prog_bar=True,
-                 sync_dist=self.sync_dist, batch_size=count)
-        self.log("val_generation_accuracy", mean("accuracy"), sync_dist=self.sync_dist,
-                 batch_size=count)
-        self.log("val_generation_loss", mean("loss"), sync_dist=self.sync_dist,
-                 batch_size=count)
+        self.log(
+            "val_generation_perplexity",
+            mean("perplexity"),
+            prog_bar=True,
+            sync_dist=self.sync_dist,
+            batch_size=count,
+        )
+        self.log(
+            "val_generation_accuracy", mean("accuracy"), sync_dist=self.sync_dist, batch_size=count
+        )
+        self.log("val_generation_loss", mean("loss"), sync_dist=self.sync_dist, batch_size=count)

@@ -110,16 +110,6 @@ wheels = [
 ]
 
 [[package]]
-name = "bitsandbytes"
-version = "0.50.3.dev0"
-source = { git = "https://github.com/theblackcat102/bitsandbytes?rev=c80d430a002edd3ef403a128ba3927e6c02a6417#c80d430a002edd3ef403a128ba3927e6c02a6417" }
-dependencies = [
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "torch" },
-]
-
-[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1356,13 +1346,13 @@ name = "qwen3"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "bitsandbytes" },
     { name = "comet-ml" },
     { name = "datasets" },
     { name = "huggingface-hub" },
     { name = "lightning" },
     { name = "loguru" },
     { name = "pyyaml" },
+    { name = "rich" },
     { name = "tokenizers" },
     { name = "torch" },
 ]
@@ -1374,13 +1364,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bitsandbytes", git = "https://github.com/theblackcat102/bitsandbytes?rev=c80d430a002edd3ef403a128ba3927e6c02a6417" },
     { name = "comet-ml", specifier = ">=3.53.0" },
     { name = "datasets", specifier = ">=5.1.0" },
     { name = "huggingface-hub", specifier = ">=2.2.0" },
     { name = "lightning", specifier = ">=2.6.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13" },
     { name = "tokenizers", specifier = ">=0.23.3" },
     { name = "torch", specifier = ">=2.14.0", index = "https://download.pytorch.org/whl/cu126" },
 ]
