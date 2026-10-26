@@ -1,228 +1,170 @@
 # Qwen3 From Scratch
 
-Small Qwen3-style decoder-only language model trained from scratch with
-PyTorch Lightning. Project includes:
+A small Qwen3-style decoder-only language model trained from scratch with PyTorch Lightning.
 
-- Grouped-query attention with rotary position embeddings
+![Qwen3](/assets/qwen3_architecture.svg)
+
+- Grouped-query attention with per-head Q/K RMSNorm and rotary position embeddings
 - RMSNorm and SwiGLU feed-forward blocks
 - Tied token embedding and language-model head
-- Muon optimizer for matrix parameters
-- Cached Hugging Face tokenization and deterministic train/validation split
+- Hybrid optimizer: Muon for 2D hidden weights, AdamW for embeddings and norms
+- Cached tokenization (Cosmopedia-v2, SmolLM tokenizer) and a deterministic train/validation split
+- Periodic sample generation during validation, plus a standalone inference script
 
-This repository is an educational implementation, not an official Qwen3
-checkpoint or reproduction of Qwen3 production architecture.
+This is an educational implementation, not an official Qwen3 checkpoint or a reproduction of the
+production architecture.
 
 ## Requirements
 
-- Linux
-- Python `>=3.14`
-- Hugging Face network access on first data preparation
-
-Install dependencies with `uv`:
+- Linux, Python `>=3.14`, [uv](https://docs.astral.sh/uv/)
+- Network access on first run (tokenizer and dataset are downloaded from Hugging Face)
+- A CUDA GPU is recommended; CPU works with `--device cpu`
 
 ```bash
 uv sync
 ```
 
-CPU execution is supported. The default configuration targets CUDA.
-
 ## Project Layout
 
 ```text
-main.py                         Training entrypoint
-src/configs/example.yaml        Example model and training configuration
-src/data/dataset.py             Token cache and next-token dataset
-src/data/dataloader.py          Lightning DataModule
-src/neuralnet/                  Model architecture
-src/optim/muon.py               Muon optimizer
-src/trainer.py                  LightningModule and training loop
-tests/                          Unit tests
+.
+├── main.py                       # training entrypoint (CLI)
+├── pyproject.toml                # dependencies, ruff config
+├── scripts/
+│   ├── convert_cache.py          # convert an old pickle token cache to the mmap format
+│   └── infer.py                  # interactive / one-shot generation from a checkpoint
+├── src/
+│   ├── configs/
+│   │   ├── model.yaml            # model + training hyperparameters
+│   │   ├── model_config.py       # ModelConfig dataclass
+│   │   └── logging.py            # loguru setup
+│   ├── data/
+│   │   ├── tokenizer.py          # TextTokenizer (wraps `tokenizers`)
+│   │   ├── dataset.py            # token cache + next-token dataset
+│   │   └── dataloader.py         # Lightning DataModule
+│   ├── neuralnet/
+│   │   ├── qwen.py               # Qwen3LLM
+│   │   ├── transformer.py        # TransformerBlock
+│   │   ├── attention.py          # GroupedQueryAttention
+│   │   ├── feed_forward.py       # SwiGLUFeedForward
+│   │   └── rotatory_pos_embed.py # RoPE
+│   ├── optim/
+│   │   ├── muon.py               # Muon
+│   │   └── hybridoptim.py        # HybridOptimizer (Muon + AdamW)
+│   └── trainer.py                # LightningModule, generation, metrics
+└── tests/                        # pytest suite
 ```
 
-## Training
-
-Run configured training on one GPU:
-
-```bash
-uv run python main.py --config src/configs/example.yaml
-```
-
-Run short smoke training:
-
-```bash
-uv run python main.py \
-  --config src/configs/example.yaml \
-  --max-steps 10 \
-  --batch-size 1 \
-  --max-seq-len 256
-```
-
-Command-line overrides:
-
-- `--config`: YAML configuration path
-- `--max-steps`: training-step limit
-- `--batch-size`: per-device batch size
-- `--max-seq-len`: token sequence length
-
-## T4 Configuration
-
-T4 GPUs provide 16 GB VRAM and support FP16, not BF16. Start with:
-
-```yaml
-batch_size: 2
-max_seq_len: 512
-gradient_accumulation_steps: 4
-use_amp: true
-device: cuda
-```
-
-If memory runs out, use batch size `1` or sequence length `256`:
-
-```bash
-uv run python main.py \
-  --config src/configs/example.yaml \
-  --batch-size 1 \
-  --max-seq-len 256
-```
-
-`gradient_accumulation_steps` increases effective batch size without
-increasing per-step activation memory.
-
-## Data Pipeline
-
-First run downloads the SmolLM tokenizer and streams the Cosmopedia-v2
-dataset. It tokenizes up to `num_documents` documents and `max_tokens` tokens,
-then writes:
-
-```text
-data_cache/tokenized_data_<num_documents>_<max_tokens>.pkl
-```
-
-Later runs reuse this cache. Cache files contain Python pickle data and should
-only be loaded from trusted local sources.
-
-Default example uses `500` documents and `500000` maximum tokens.
-
-## Configuration
-
-Edit `src/configs/example.yaml` for model and training settings. Important
-fields:
-
-| Field | Purpose |
-| --- | --- |
-| `d_model` | Hidden dimension |
-| `n_layers` | Transformer block count |
-| `n_heads` | Query attention heads |
-| `n_kv_heads` | Key/value heads |
-| `max_seq_len` | Tokens per training sample |
-| `num_documents` | Documents streamed from dataset |
-| `max_tokens` | Tokenization limit |
-| `batch_size` | Per-device batch size |
-| `max_steps` | Training-step limit |
-| `gradient_accumulation_steps` | Effective batch scaling |
-| `eval_every` | Validation interval |
-| `eval_steps` | Validation batch limit |
-
-`vocab_size` must remain `null` in the YAML. Data preparation fills it from
-the tokenizer before model construction.
-
-## Tests
-
-```bash
-uv run pytest -q
-```
-
-Current suite covers attention components, rotary embedding behavior, token
-shifting, deterministic data splitting, and optimizer construction.
-
-## Architecture
+## Training Pipeline
 
 ```mermaid
 ---
 config:
-  layout: elk
+  flowchart:
+    curve: basis
 ---
+flowchart LR
+    CFG["model.yaml + CLI flags"] --> DM
+    HF[("HF: smollm-corpus<br/>cosmopedia-v2")] --> DM["QwenDataModule<br/>tokenize + cache"]
+    DM --> CACHE[("data_cache/<br/>.pkl + .tokens.npy")]
+    CACHE --> SPLIT["TextTokenDataset<br/>90/10 train/val split"]
+    SPLIT --> TR["QwenTrainer<br/>(LightningModule)"]
+    TR --> OPT["HybridOptimizer<br/>Muon + AdamW"]
+    TR --> VAL["Validation<br/>loss, perplexity, samples"]
+    VAL --> CKPT[("checkpoints/<br/>top-3 by val_loss")]
+    CKPT --> INF["scripts/infer.py"]
+```
 
-flowchart TD
+## Steps to Train Qwen3
 
-    A["Input Token IDs"] --> B["Token Embedding"]
-    B --> C["Position Dropout"]
-    C --> TB1
+1. **Install dependencies**
 
-    subgraph TB1["Transformer Block 1"]
-        direction TB
+   ```bash
+   uv sync
+   ```
 
-        TB1_IN["Input X"] --> TB1_N1["RMSNorm"]
-        TB1_N1 --> ATTN1
+2. **Configure the model.** Edit `src/configs/model.yaml`. The shipped values (`d_model: 8`,
+   2 layers) are a tiny smoke-test model; raise them for a real run, for example
+   `d_model: 512`, `n_heads: 8`, `n_layers: 6`, `d_ff: 1536`, `n_kv_heads: 4`. Also raise
+   `num_documents` and `max_tokens` to train on more data. Keep `vocab_size: null`; it is filled
+   from the tokenizer.
 
-        subgraph ATTN1["Qwen3 Attention"]
-            direction TB
+3. **Run the tests** (fast, no GPU or downloads needed):
 
-            A1["Normalized X"]
-            A1 --> Q1["Q_proj"]
-            A1 --> K1["K_proj"]
-            A1 --> V1["V_proj"]
+   ```bash
+   uv run pytest -q
+   ```
 
-            Q1 --> QR1["Reshape Q"]
-            K1 --> KR1["Reshape K"]
-            V1 --> VR1["Reshape V"]
+4. **Train.** The first run downloads the dataset, tokenizes it and writes the cache; later runs
+   reuse it.
 
-            QR1 --> QN1["Q_norm"]
-            KR1 --> KN1["K_norm"]
+   ```bash
+   uv run python main.py                       # one GPU, config from model.yaml
+   uv run python main.py -g 2 -db ddp          # multi-GPU (default backend: deepspeed_stage_2)
+   uv run python main.py --precision fp16-mixed  # e.g. T4 GPUs, which lack bf16
+   ```
 
-            QN1 --> RQ1["RoPE Q"]
-            KN1 --> RK1["RoPE K"]
+5. **Monitor.** Training logs `train_*` and `val_*` loss, perplexity and accuracy. Every
+   `--inference-every` steps (default 100) it samples text from fixed prompts during validation.
+   Set `COMET_API_KEY` to also log to Comet.
 
-            VR1 --> KV1["Repeat KV Heads"]
-            RK1 --> KV1
+6. **Resume** from a checkpoint:
 
-            RQ1 --> SDPA1["Scaled Dot-Product Attention"]
-            KV1 --> SDPA1
+   ```bash
+   uv run python main.py --resume-checkpoint checkpoints/<name>.ckpt
+   ```
 
-            SDPA1 --> AO1["Attention Output"]
-            AO1 --> RO1["Reshape"]
-            RO1 --> WO1["W_o"]
-            WO1 --> ATTNO1["Attention Output"]
-        end
+7. **Generate** from a trained checkpoint:
 
-        ATTNO1 --> D1["Dropout"]
-        TB1_IN --> ADD1["+"]
-        D1 --> ADD1
+   ```bash
+   uv run python scripts/infer.py -p "The history of Rome" -n 256
+   ```
 
-        ADD1 --> TB1_N2["RMSNorm"]
-        TB1_N2 --> FF1
+   The model is a base model: it continues the text you give it.
 
-        subgraph FF1["SwiGLU FeedForward"]
-            direction TB
+### CLI flags
 
-            FFI1["Normalized X"]
-            FFI1 --> GP1["Gate_proj"]
-            FFI1 --> UP1["Up_proj"]
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `-c`, `--config` | `src/configs/model.yaml` | YAML configuration |
+| `-g`, `--gpus` | `1` | Number of GPUs |
+| `-db`, `--dist_backend` | `deepspeed_stage_2` | Multi-GPU strategy |
+| `-d`, `--device` | from yaml | `cpu` or `cuda` |
+| `--precision` | bf16 if `use_amp` on CUDA | `32-true`, `bf16-mixed`, `fp16-mixed` |
+| `--compile` | off | `torch.compile` the model |
+| `--checkpoint-dir` | `checkpoints` | Where checkpoints are written |
+| `--resume-checkpoint` | none | Checkpoint to resume from |
+| `--cache-dir` | `data_cache` | Tokenized dataset cache |
+| `--num-workers` | `0` | DataLoader workers |
+| `--inference-every` | `100` | Steps between sample generations |
 
-            GP1 --> SILU1["SiLU"]
-            SILU1 --> MUL1["Element-wise Multiply"]
-            UP1 --> MUL1
+### Key config fields
 
-            MUL1 --> DO1["Dropout"]
-            DO1 --> DP1["Down_proj"]
-            DP1 --> FFO1["FFN Output"]
-        end
+| Field | Purpose |
+| --- | --- |
+| `d_model`, `n_layers`, `d_ff` | Model width, depth, feed-forward size |
+| `n_heads`, `n_kv_heads` | Query and key/value heads (GQA) |
+| `max_seq_len` | Tokens per training sample |
+| `num_documents`, `max_tokens` | Data volume limits |
+| `batch_size`, `gradient_accumulation_steps` | Per-device batch and effective batch scaling |
+| `max_steps`, `eval_every`, `eval_steps` | Training length and validation schedule |
+| `muon_lr` | Muon learning rate (AdamW uses `muon_lr * 0.1`) |
+| `weight_decay`, `dropout`, `grad_clip` | Regularization |
+| `use_amp`, `device` | Mixed precision and device |
 
-        FFO1 --> ADD2["+"]
-        ADD1 --> ADD2
-        ADD2 --> TB1_OUT["Output X"]
-    end
+If a GPU runs out of memory, lower `batch_size` or `max_seq_len` and raise
+`gradient_accumulation_steps` to keep the effective batch size.
 
-    TB1 --> MORE["⋮"]
-    MORE --> TBN["Transformer Block N"]
+## Data Cache
 
-    TBN --> FINAL_NORM["Final RMSNorm"]
-    FINAL_NORM --> OUTPUT_DROPOUT["Output Dropout"]
-    OUTPUT_DROPOUT --> LM_HEAD["LM Head"]
-    LM_HEAD --> LOGITS["Logits"]
+Tokenization is cached under `data_cache/` as a pickle (texts, tokenizer JSON) plus a
+memory-mapped `.tokens.npy` that ranks and DataLoader workers share without copying. Pickle files
+can execute code on load; only use caches you created. Convert an older pickle-only cache with
+`scripts/convert_cache.py`.
 
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-    style TB1_OUT fill:#f9f,stroke:#333,stroke-width:2px
-    style LOGITS fill:#f9f,stroke:#333,stroke-width:2px
+## Tests and Linting
+
+```bash
+uv run pytest -q
+uvx ruff check . && uvx ruff format .
 ```
